@@ -1,4 +1,3 @@
-cat << 'EOF' > lib/db_helper.dart
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
@@ -10,7 +9,12 @@ class BookModel {
   final String name;
   final String testament;
 
-  BookModel({required this.id, required this.code, required this.name, required this.testament});
+  BookModel({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.testament,
+  });
 
   factory BookModel.fromMap(Map<String, dynamic> map) {
     return BookModel(
@@ -95,4 +99,3 @@ class DatabaseHelper {
     ''', ['%$query%']);
   }
 }
-EOF

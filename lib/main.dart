@@ -1,4 +1,3 @@
-cat << 'EOF' > lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'db_helper.dart';
@@ -298,4 +297,3 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 }
-EOF
