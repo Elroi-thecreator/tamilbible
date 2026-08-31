@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'db_helper.dart';
+import 'reading_plans.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -118,7 +119,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   int? _lastChapter;
   String? _lastBookName;
 
-  // Curated Daily Verses (Offline rotation)
   final List<Map<String, dynamic>> _dailyVerses = const [
     {"ref": "சங்கீதம் 23:1", "text": "கர்த்தர் என் மேய்ப்பராயிருக்கிறார்; நான் தாழ்ச்சியடையேன்."},
     {"ref": "யோவான் 3:16", "text": "தேவன், உலகத்திலுள்ள எவரும் அழியாமல் நித்தியஜீவனை அடையும்படிக்கு, தம்முடைய ஒரேபேறான குமாரனைத் தந்தருளி, இவ்வளவாய் உலகத்தில் அன்புகூர்ந்தார்."},
@@ -248,6 +248,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         title: const Text('பரிசுத்த வேதாகமம்', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
+            icon: const Icon(Icons.calendar_month_outlined),
+            tooltip: 'வாசிப்பு திட்டங்கள்',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => PlansListScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.bookmarks_outlined),
             tooltip: 'குறித்த வசனங்கள்',
             onPressed: () => Navigator.push(
@@ -275,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
-          // Daily Verse Banner
+          // Daily Verse Card
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(14, 10, 14, 4),
@@ -395,6 +403,219 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           },
         );
       },
+    );
+  }
+}
+
+class PlansListScreen extends StatelessWidget {
+  final List<BookModel> allBooks;
+  final Map<int, int> chapterCounts;
+  const PlansListScreen({super.key, required this.allBooks, required this.chapterCounts});
+
+  @override
+  Widget build(BuildContext context) {
+    final plans = ReadingPlansData.getAllPlans();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('வாசிப்பு திட்டங்கள் (Plans)')),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: plans.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          final plan = plans[index];
+          return Card(
+            elevation: 1.5,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          plan.title,
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Chip(
+                        label: Text('${plan.totalDays} நாட்கள்', style: const TextStyle(fontSize: 12)),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    plan.description,
+                    style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonalIcon(
+                      icon: const Icon(Icons.arrow_forward, size: 16),
+                      label: const Text('திட்டத்தைத் தொடங்கு'),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PlanDetailScreen(
+                              plan: plan,
+                              allBooks: allBooks,
+                              chapterCounts: chapterCounts,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class PlanDetailScreen extends StatefulWidget {
+  final ReadingPlan plan;
+  final List<BookModel> allBooks;
+  final Map<int, int> chapterCounts;
+
+  const PlanDetailScreen({
+    super.key,
+    required this.plan,
+    required this.allBooks,
+    required this.chapterCounts,
+  });
+
+  @override
+  State<PlanDetailScreen> createState() => _PlanDetailScreenState();
+}
+
+class _PlanDetailScreenState extends State<PlanDetailScreen> {
+  Set<int> _completedDays = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+  }
+
+  String _getProgressKey(int day) => '${widget.plan.id}_day_$day';
+
+  Future<void> _loadProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    final set = <int>{};
+    for (int d = 1; d <= widget.plan.totalDays; d++) {
+      if (prefs.getBool(_getProgressKey(d)) ?? false) {
+        set.add(d);
+      }
+    }
+    setState(() {
+      _completedDays = set;
+      _loading = false;
+    });
+  }
+
+  Future<void> _toggleDay(int day) async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDone = _completedDays.contains(day);
+    if (isDone) {
+      await prefs.setBool(_getProgressKey(day), false);
+      setState(() => _completedDays.remove(day));
+    } else {
+      await prefs.setBool(_getProgressKey(day), true);
+      setState(() => _completedDays.add(day));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = widget.plan.totalDays == 0 ? 0.0 : (_completedDays.length / widget.plan.totalDays);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.plan.title)),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                // Progress Bar Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('முன்னேற்றம்: ${_completedDays.length} / ${widget.plan.totalDays} நாட்கள்',
+                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text('${(percent * 100).toInt()}%',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(value: percent, minHeight: 8),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: widget.plan.days.length,
+                    itemBuilder: (context, index) {
+                      final day = widget.plan.days[index];
+                      final isDone = _completedDays.contains(day.dayNumber);
+
+                      return CheckboxListTile(
+                        value: isDone,
+                        onChanged: (_) => _toggleDay(day.dayNumber),
+                        title: Text('நாள் ${day.dayNumber}: ${day.summary}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              decoration: isDone ? TextDecoration.lineThrough : null,
+                            )),
+                        subtitle: Wrap(
+                          spacing: 6,
+                          children: day.portions.map((p) {
+                            return ActionChip(
+                              avatar: const Icon(Icons.menu_book, size: 14),
+                              label: Text('${p.bookName} ${p.chapter}', style: const TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                final targetBook = widget.allBooks.firstWhere(
+                                  (b) => b.id == p.bookId,
+                                  orElse: () => widget.allBooks.first,
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ReaderScreen(
+                                      book: targetBook,
+                                      initialChapter: p.chapter,
+                                      totalChapters: widget.chapterCounts[targetBook.id] ?? 1,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
