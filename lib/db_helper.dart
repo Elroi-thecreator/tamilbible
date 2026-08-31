@@ -83,6 +83,21 @@ class DatabaseHelper {
     return res.map((e) => VerseModel.fromMap(e)).toList();
   }
 
+  static Future<String?> getSingleVerseText(int bookId, int chapter, int verse) async {
+    final db = await database;
+    final List<Map<String, dynamic>> res = await db.query(
+      'verses',
+      columns: ['text_ta'],
+      where: 'book_id = ? AND chapter = ? AND verse = ?',
+      whereArgs: [bookId, chapter, verse],
+      limit: 1,
+    );
+    if (res.isNotEmpty) {
+      return res.first['text_ta'] as String;
+    }
+    return null;
+  }
+
   static Future<List<Map<String, dynamic>>> searchTamil(String query) async {
     final db = await database;
     return await db.rawQuery('''
