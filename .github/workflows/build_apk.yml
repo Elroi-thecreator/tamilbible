@@ -28,6 +28,23 @@ jobs:
       - name: Scaffold Android Wrapper
         run: flutter create . --org com.tamilbible.app --platforms android
 
+      - name: Fix Kotlin Duplicate Class Resolution
+        run: |
+          cat << 'EOF' >> android/app/build.gradle
+
+          configurations.all {
+              resolutionStrategy {
+                  force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+                  force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+                  force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+              }
+          }
+
+          dependencies {
+              implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+          }
+          EOF
+
       - name: Install Dependencies
         run: flutter pub get
 
