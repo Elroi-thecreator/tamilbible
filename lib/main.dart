@@ -94,7 +94,7 @@ class TamilBibleApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: 'பரிசுத்த வேதாகமம்',
+          title: 'திருவிவிலியம்',
           debugShowCheckedModeBanner: false,
           theme: theme,
           home: const HomeScreen(),
@@ -246,7 +246,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('பரிசுத்த வேதாகமம்', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/logo.png',
+                height: 34,
+                width: 34,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(Icons.menu_book, size: 28),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('திருவிவிலியம்', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_month_outlined),
@@ -284,7 +299,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
-          // Daily Verse
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(14, 10, 14, 4),
@@ -325,8 +339,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ],
             ),
           ),
-
-          // Last Read Bar
           if (_lastBookId != null && _lastChapter != null && _lastBookName != null)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -354,7 +366,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 },
               ),
             ),
-
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -438,12 +449,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _saveLastRead(_currentChapter);
   }
 
-  Future<void> _startReadingFullChapter() async {
-    final verses = await DatabaseHelper.getVerses(widget.book.id, _currentChapter);
-    // Joins ONLY the Tamil text without including verse numbers (v.number)
-    final text = verses.map((v) => v.text.trim()).join(' ');
-    await TtsEngine.instance.speakText(text);
-  }
   Future<void> _saveLastRead(int ch) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('last_book_id', widget.book.id);
@@ -515,7 +520,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Future<void> _startReadingFullChapter() async {
     final verses = await DatabaseHelper.getVerses(widget.book.id, _currentChapter);
-    final text = verses.map((v) => '${v.number}. ${v.text}').join('. ');
+    // Skips verse numbers, reading continuous Tamil scripture smoothly
+    final text = verses.map((v) => v.text.trim()).join(' ');
     await TtsEngine.instance.speakText(text);
   }
 
@@ -558,7 +564,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
       ),
       body: Column(
         children: [
-          // Collapsible Audio Control Bar
           if (_audioBarVisible)
             AnimatedBuilder(
               animation: TtsEngine.instance,
@@ -609,7 +614,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 );
               },
             ),
-
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -885,6 +889,99 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
+class HighlightsScreen extends StatefulWidget {
+  final List<BookModel> allBooks;
+  final Map<int, int> chapterCounts;
+  const HighlightsScreen({super.key, required this.allBooks, required this.chapterCounts});
+
+  @override
+  State<HighlightsScreen> createState() => _HighlightsScreenState();
+}
+
+class _HighlightsScreenState extends State<HighlightsScreen> {
+  List<Map<String, dynamic>> _savedVerses = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllHighlights();
+  }
+
+  Future<void> _loadAllHighlights() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('hl_'));
+    final List<Map<String, dynamic>> list = [];
+
+    for (var k in keys) {
+      final parts = k.split('_');
+      if (parts.length == 4) {
+        final bookId = int.parse(parts[1]);
+        final ch = int.parse(parts[2]);
+        final verseNum = int.parse(parts[3]);
+        final colorHex = prefs.getString(k);
+        final book = widget.allBooks.firstWhere((b) => b.id == bookId, orElse: () => widget.allBooks.first);
+        final verseText = await DatabaseHelper.getSingleVerseText(bookId, ch, verseNum);
+
+        if (verseText != null) {
+          list.add({
+            "book": book,
+            "book_id": bookId,
+            "chapter": ch,
+            "verse": verseNum,
+            "text": verseText,
+            "colorHex": colorHex,
+          });
+        }
+      }
+    }
+
+    setState(() {
+      _savedVerses = list;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('முக்கிய வசனங்கள் (Highlights)')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _savedVerses.isEmpty
+              ? const Center(child: Text('ஹைலைட் செய்யப்பட்ட வசனங்கள் இல்லை.'))
+              : ListView.separated(
+                  itemCount: _savedVerses.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = _savedVerses[index];
+                    final book = item["book"] as BookModel;
+                    final Color? bg = item["colorHex"] != null ? Color(int.parse(item["colorHex"])) : null;
+
+                    return ListTile(
+                      tileColor: bg?.withOpacity(0.35),
+                      title: Text('${book.name} ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(item["text"]),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ReaderScreen(
+                              book: book,
+                              initialChapter: item["chapter"],
+                              totalChapters: widget.chapterCounts[book.id] ?? 1,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+    );
+  }
+}
+
 class PlansListScreen extends StatelessWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1093,99 +1190,6 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                 ),
               ],
             ),
-    );
-  }
-}
-
-class HighlightsScreen extends StatefulWidget {
-  final List<BookModel> allBooks;
-  final Map<int, int> chapterCounts;
-  const HighlightsScreen({super.key, required this.allBooks, required this.chapterCounts});
-
-  @override
-  State<HighlightsScreen> createState() => _HighlightsScreenState();
-}
-
-class _HighlightsScreenState extends State<HighlightsScreen> {
-  List<Map<String, dynamic>> _savedVerses = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllHighlights();
-  }
-
-  Future<void> _loadAllHighlights() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('hl_'));
-    final List<Map<String, dynamic>> list = [];
-
-    for (var k in keys) {
-      final parts = k.split('_');
-      if (parts.length == 4) {
-        final bookId = int.parse(parts[1]);
-        final ch = int.parse(parts[2]);
-        final verseNum = int.parse(parts[3]);
-        final colorHex = prefs.getString(k);
-        final book = widget.allBooks.firstWhere((b) => b.id == bookId, orElse: () => widget.allBooks.first);
-        final verseText = await DatabaseHelper.getSingleVerseText(bookId, ch, verseNum);
-
-        if (verseText != null) {
-          list.add({
-            "book": book,
-            "book_id": bookId,
-            "chapter": ch,
-            "verse": verseNum,
-            "text": verseText,
-            "colorHex": colorHex,
-          });
-        }
-      }
-    }
-
-    setState(() {
-      _savedVerses = list;
-      _loading = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('முக்கிய வசனங்கள் (Highlights)')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _savedVerses.isEmpty
-              ? const Center(child: Text('ஹைலைட் செய்யப்பட்ட வசனங்கள் இல்லை.'))
-              : ListView.separated(
-                  itemCount: _savedVerses.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = _savedVerses[index];
-                    final book = item["book"] as BookModel;
-                    final Color? bg = item["colorHex"] != null ? Color(int.parse(item["colorHex"])) : null;
-
-                    return ListTile(
-                      tileColor: bg?.withOpacity(0.35),
-                      title: Text('${book.name} ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(item["text"]),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ReaderScreen(
-                              book: book,
-                              initialChapter: item["chapter"],
-                              totalChapters: widget.chapterCounts[book.id] ?? 1,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
     );
   }
 }
