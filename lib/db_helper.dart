@@ -9,12 +9,7 @@ class BookModel {
   final String name;
   final String testament;
 
-  BookModel({
-    required this.id,
-    required this.code,
-    required this.name,
-    required this.testament,
-  });
+  BookModel({required this.id, required this.code, required this.name, required this.testament});
 
   factory BookModel.fromMap(Map<String, dynamic> map) {
     return BookModel(
@@ -91,11 +86,11 @@ class DatabaseHelper {
   static Future<List<Map<String, dynamic>>> searchTamil(String query) async {
     final db = await database;
     return await db.rawQuery('''
-      SELECT b.name_ta, v.chapter, v.verse, v.text_ta 
+      SELECT b.id as book_id, b.name_ta, v.chapter, v.verse, v.text_ta 
       FROM verses v
       JOIN books b ON v.book_id = b.id
       WHERE v.text_ta LIKE ?
-      LIMIT 50
+      LIMIT 60
     ''', ['%$query%']);
   }
 }
