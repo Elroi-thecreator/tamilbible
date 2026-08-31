@@ -35,19 +35,27 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<BookModel> _allBooks = [];
+  Map<int, int> _chapterCounts = {};
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadBooks();
+    _loadData();
   }
 
-  Future<void> _loadBooks() async {
+  Future<void> _loadData() async {
     final books = await DatabaseHelper.getBooks();
+    final Map<int, int> counts = {};
+    for (var b in books) {
+      final chapters = await DatabaseHelper.getChapters(b.id);
+      counts[b.id] = chapters.length;
+    }
+
     setState(() {
       _allBooks = books;
+      _chapterCounts = counts;
       _loading = false;
     });
   }
@@ -97,16 +105,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final book = books[index];
+        final totalChapters = _chapterCounts[book.id] ?? 1;
+
         return ListTile(
           leading: CircleAvatar(
-            child: Text('${book.id}', style: const TextStyle(fontSize: 12)),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            child: Text(
+              '${book.id}', 
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onPrimaryContainer),
+            ),
           ),
-          title: Text(book.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+          title: Text(
+            book.name, 
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+          // Chapter count displayed at the end of the row
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$totalChapters அதி.',
+              style: TextStyle(
+                fontSize: 13, 
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
           onTap: () {
+            // Directly navigate to Chapter 1
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ChapterScreen(book: book)),
+              MaterialPageRoute(
+                builder: (_) => ReaderScreen(
+                  book: book, 
+                  initialChapter: 1,
+                  totalChapters: totalChapters,
+                ),
+              ),
             );
           },
         );
@@ -115,65 +154,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
-class ChapterScreen extends StatelessWidget {
-  final BookModel book;
-  const ChapterScreen({super.key, required this.book});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('${book.name} - அதிகாரங்கள்')),
-      body: FutureBuilder<List<int>>(
-        future: DatabaseHelper.getChapters(book.id),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final chapters = snapshot.data!;
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: chapters.length,
-            itemBuilder: (context, index) {
-              final ch = chapters[index];
-              return InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => ReaderScreen(book: book, initialChapter: ch)),
-                  );
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text('$ch', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
 class ReaderScreen extends StatefulWidget {
   final BookModel book;
   final int initialChapter;
-  const ReaderScreen({super.key, required this.book, required this.initialChapter});
+  final int totalChapters;
+
+  const ReaderScreen({
+    super.key, 
+    required this.book, 
+    required this.initialChapter,
+    required this.totalChapters,
+  });
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
 class _ReaderScreenState extends State<ReaderScreen> {
+  late PageController _pageController;
   late int _currentChapter;
   double _fontSize = 18.0;
 
@@ -181,62 +179,191 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void initState() {
     super.initState();
     _currentChapter = widget.initialChapter;
+    _pageController = PageController(initialPage: widget.initialChapter - 1);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _showChapterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${widget.book.name} - அதிகாரத்தைத் தேர்ந்தெடுக்கவும்',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: widget.totalChapters,
+                  itemBuilder: (context, index) {
+                    final chNum = index + 1;
+                    final isSelected = chNum == _currentChapter;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _pageController.jumpToPage(index);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                          border: Border.all(
+                            color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey.shade400,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$chNum',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : Theme.of(context).textTheme.bodyLarge?.color,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.book.name} $_currentChapter'),
+        // Interactive title to jump chapters directly from header
+        title: InkWell(
+          onTap: _showChapterBottomSheet,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${widget.book.name} $_currentChapter',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down),
+              ],
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.remove),
-            onPressed: () => setState(() => _fontSize = (_fontSize - 2).clamp(14.0, 30.0)),
+            onPressed: () => setState(() => _fontSize = (_fontSize - 2).clamp(14.0, 32.0)),
           ),
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => setState(() => _fontSize = (_fontSize + 2).clamp(14.0, 30.0)),
+            onPressed: () => setState(() => _fontSize = (_fontSize + 2).clamp(14.0, 32.0)),
           ),
         ],
       ),
-      body: FutureBuilder<List<VerseModel>>(
-        future: DatabaseHelper.getVerses(widget.book.id, _currentChapter),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final verses = snapshot.data!;
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            itemCount: verses.length,
-            itemBuilder: (context, index) {
-              final v = verses[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: _fontSize,
-                      height: 1.6,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                    children: [
-                      TextSpan(
-                        text: '${v.number} ',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: _fontSize * 0.85,
-                        ),
-                      ),
-                      TextSpan(text: v.text),
-                    ],
-                  ),
-                ),
-              );
-            },
+      // Swipe left/right between chapters
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.totalChapters,
+        onPageChanged: (pageIndex) {
+          setState(() {
+            _currentChapter = pageIndex + 1;
+          });
+        },
+        itemBuilder: (context, pageIndex) {
+          final chapter = pageIndex + 1;
+          return ChapterView(
+            bookId: widget.book.id,
+            chapter: chapter,
+            fontSize: _fontSize,
           );
         },
       ),
+    );
+  }
+}
+
+class ChapterView extends StatelessWidget {
+  final int bookId;
+  final int chapter;
+  final double fontSize;
+
+  const ChapterView({
+    super.key,
+    required this.bookId,
+    required this.chapter,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<VerseModel>>(
+      future: DatabaseHelper.getVerses(bookId, chapter),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('வசனங்கள் கிடைக்கவில்லை'));
+        }
+
+        final verses = snapshot.data!;
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          itemCount: verses.length,
+          itemBuilder: (context, index) {
+            final v = verses[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    height: 1.65,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '${v.number} ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontSize: fontSize * 0.85,
+                      ),
+                    ),
+                    TextSpan(text: v.text),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -288,8 +415,10 @@ class _SearchScreenState extends State<SearchScreen> {
               itemBuilder: (context, index) {
                 final item = _results[index];
                 return ListTile(
-                  title: Text('${item['name_ta']} ${item['chapter']}:${item['verse']}', 
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(
+                    '${item['name_ta']} ${item['chapter']}:${item['verse']}', 
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(item['text_ta']),
                 );
               },
