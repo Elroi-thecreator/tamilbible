@@ -438,6 +438,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _saveLastRead(_currentChapter);
   }
 
+  Future<void> _startReadingFullChapter() async {
+    final verses = await DatabaseHelper.getVerses(widget.book.id, _currentChapter);
+    // Joins ONLY the Tamil text without including verse numbers (v.number)
+    final text = verses.map((v) => v.text.trim()).join(' ');
+    await TtsEngine.instance.speakText(text);
+  }
   Future<void> _saveLastRead(int ch) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('last_book_id', widget.book.id);
