@@ -116,23 +116,50 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<BookModel> _allBooks = [];
   Map<int, int> _chapterCounts = {};
   bool _loading = true;
+  bool _isVerseExpanded = true;
   int? _lastBookId;
   int? _lastChapter;
   String? _lastBookName;
 
+  // 31 Curated Daily Verses for Every Day of the Month
   final List<Map<String, dynamic>> _dailyVerses = const [
     {"ref": "சங்கீதம் 23:1", "text": "கர்த்தர் என் மேய்ப்பராயிருக்கிறார்; நான் தாழ்ச்சியடையேன்."},
     {"ref": "யோவான் 3:16", "text": "தேவன், உலகத்திலுள்ள எவரும் அழியாமல் நித்தியஜீவனை அடையும்படிக்கு, தம்முடைய ஒரேபேறான குமாரனைத் தந்தருளி, இவ்வளவாய் உலகத்தில் அன்புகூர்ந்தார்."},
     {"ref": "பிலிப்பியர் 4:13", "text": "என்னைப் பெலப்படுத்துகிற கிறிஸ்துவினாலே எல்லாவற்றையுஞ்செய்ய எனக்குப் பெலனுண்டு."},
-    {"ref": "நீதிமொழிகள் 3:5", "text": "உன் சுயபுத்தியின்மேல் சாயாமல், உன் முழு இருதயத்தோடும் கர்த்தரில் நம்பிக்கையாயிரு."},
-    {"ref": "ஏசாயா 41:10", "text": "நீ பயப்படாதே, நான் உன்னுடனே இருக்கிறேன்; திகையாதே, நான் உன் தேவன்; நான் உன்னைப் பலப்படுத்தி உனக்குச் சகாயம்பண்ணுவேன்."},
+    {"ref": "நீதிமொழிகள் 3:5-6", "text": "உன் சுயபுத்தியின்மேல் சாயாமல், உன் முழு இருதயத்தோடும் கர்த்தரில் நம்பிக்கையாயிரு; உன் வழிகளிலெல்லாம் அவரை நினைத்துக்கொள்; அப்பொழுது அவர் உன் பாதைகளைச் செவ்வைப்படுத்துவார்."},
+    {"ref": "ஏசாயா 41:10", "text": "நீ பயப்படாதே, நான் உன்னுடனே இருக்கிறேன்; திகையாதே, நான் உன் தேவன்; நான் உன்னைப் பலப்படுத்தி உனக்குச் சகாயம்பண்ணுவேன்; என் நீதியின் வலதுகரத்தினால் உன்னைத் தாங்குவேன்."},
     {"ref": "மத்தேயு 6:33", "text": "முதலாவது தேவனுடைய ராஜ்யத்தையும் அவருடைய நீதியையும் தேடுங்கள்; அப்பொழுது இவைகளெல்லாம் உங்களுக்குக்கூடக் கொடுக்கப்படும்."},
-    {"ref": "எரேமியா 29:11", "text": "நீங்கள் எதிர்பார்க்கும் முடிவை உங்களுக்குக் கொடுக்கும்படிக்கு நான் உங்களைக்குறித்து நினைத்திருக்கிற நினைவுகளை அறிவேன் என்று கர்த்தர் சொல்லுகிறார்."}
+    {"ref": "எரேமியா 29:11", "text": "நீங்கள் எதிர்பார்த்திருக்கும் முடிவை உங்களுக்குக் கொடுக்கும்படிக்கு நான் உங்களைக்குறித்து நினைத்திருக்கிற நினைவுகளை அறிவேன் என்று கர்த்தர் சொல்லுகிறார்; அவைகள் தீமைக்கல்ல, சமாதானத்துக்கேதுவான நினைவுகளே."},
+    {"ref": "யோசுவா 1:9", "text": "நான் உனக்குக் கட்டளையிடவில்லையா? பலங்கொண்டு திடமனதாயிரு; திகையாதே, கலங்காதே, நீ போகும் இடமெல்லாம் உன் தேவனாகிய கர்த்தர் உன்னோடே இருக்கிறார்."},
+    {"ref": "சங்கீதம் 46:1", "text": "தேவன் நமக்கு அடைக்கலமும் பெலனும், ஆபத்துக்காலத்தில் அநுகூலமான துணையுமானவர்."},
+    {"ref": "ரோமர் 8:28", "text": "அன்றியும், அவருடைய தீர்மானத்தின்படி அழைக்கப்பட்டவர்களாய் தேவனிடத்தில் அன்புகூருகிறவர்களுக்குச் சகலமும் நன்மைக்கு ஏதுவாக நடக்கிறது என்று அறிந்திருக்கிறோம்."},
+    {"ref": "சங்கீதம் 119:105", "text": "உம்முடைய வசனம் என் கால்களுக்குத் தீபமும், என் பாதைக்கு வெளிச்சமுமாயிருக்கிறது."},
+    {"ref": "மத்தேயு 11:28", "text": "வருத்தப்பட்டுப் பாரஞ்சுமக்கிறவர்களே! நீங்கள் எல்லாரும் என்னிடத்தில் வாருங்கள்; நான் உங்களுக்கு இளைப்பாறுதல் தருவேன்."},
+    {"ref": "சங்கீதம் 91:1-2", "text": "உன்னதமானவரின் மறைவிலிருக்கிறவன் சர்வவல்லவருடைய நிழலில் தங்குவான். நான் கர்த்தரை நோக்கி: நீர் என் அடைக்கலம், என் கோட்டை, என் தேவன், நான் நம்பியிருக்கிறவர் என்று சொல்லுவேன்."},
+    {"ref": "நீதிமொழிகள் 18:10", "text": "கர்த்தரின் நாமம் பலத்த துருகம்; நீதிமான் அதற்குள் ஓடிச் சுகமாயிருப்பான்."},
+    {"ref": "ஏசாயா 40:31", "text": "கர்த்தருக்குக் காத்திருக்கிறவர்களோ புதுப்பெலன் அடைந்து, கழுகுகளைப்போலச் செட்டைகளை அடித்து எழும்புவார்கள்; அவர்கள் ஓடினாலும் இளைப்படையார்கள், நடந்தாலும் சோர்ந்துபோகார்கள்."},
+    {"ref": "2 தீமோத்தேயு 1:7", "text": "தேவன் நமக்கு பயமுள்ள ஆவியைக்கொடாமல், பலமும் அன்பும் தெளிந்த புத்தியுமுள்ள ஆவியையே கொடுத்திருக்கிறார்."},
+    {"ref": "எபிரெயர் 11:1", "text": "விசுவாசமானது நம்பப்படுகிறவைகளின் உறுதியும், காணப்படாதவைகளின் நிச்சயமுமாயிருக்கிறது."},
+    {"ref": "சங்கீதம் 121:1-2", "text": "எனக்கு ஒத்தாசை வரும் பர்வதங்களுக்கு நேராக என் கண்களை ஏறெடுக்கிறேன். வானத்தையும் பூமியையும் உண்டாக்கின கர்த்தரிடத்திலிருந்து எனக்கு ஒத்தாசை வரும்."},
+    {"ref": "1 பேதுரு 5:7", "text": "அவர் உங்களை விசாரிக்கிறவரானபடியால், உங்கள் கவலைகளையெல்லாம் அவர்மேல் வைத்துவிடுங்கள்."},
+    {"ref": "பிலிப்பியர் 4:6-7", "text": "நீங்கள் ஒன்றுக்குங் கவலைப்படாமல், எல்லாவற்றையுங்குறித்து உங்கள் விண்ணப்பங்களை ஸ்தோத்திரத்தோடே கூடிய ஜெபத்தினாலும் வேண்டுதலினாலும் தேவனுக்குத் தெரியப்படுத்துங்கள்."},
+    {"ref": "சங்கீதம் 37:4", "text": "கர்த்தரிடத்தில் மனமகிழ்ச்சியாயிரு; அவர் உன் இருதயத்தின் வேண்டுதல்களை உனக்கு அருள்செய்வார்."},
+    {"ref": "யோவான் 14:27", "text": "சமாதானத்தை உங்களுக்கு வைத்துப்போகிறேன், என்னுடைய சமாதானத்தையே உங்களுக்குக் கொடுக்கிறேன்; உலகம் கொடுக்கிறபிரகாரம் நான் உங்களுக்குக் கொடுக்கிறதில்லை. உங்கள் இருதயம் கலங்காமலும் பயப்படாமலும் இருப்பதாக."},
+    {"ref": "கலாத்தியர் 5:22-23", "text": "ஆவியின் கனியோ, அன்பு, சந்தோஷம், சமாதானம், நீடியபொறுமை, தயவு, நற்குணம், விசுவாசம், சாந்தம், இச்சையடக்கம்; இப்படிப்பட்டவைகளுக்கு விரோதமான பிரமாணம் ஒன்றுமில்லை."},
+    {"ref": "சங்கீதம் 34:8", "text": "கர்த்தர் நல்லவர் என்பதை ருசித்துப்பாருங்கள்; அவர்மேல் நம்பிக்கையாயிருக்கிற மனுஷன் பாக்கியவான்."},
+    {"ref": "நீதிமொழிகள் 4:23", "text": "எல்லாக் காவலோடும் உன் இருதயத்தைக் காத்துக்கொள், அதினிடத்தினின்று ஜீவஊற்று புறப்படும்."},
+    {"ref": "சங்கீதம் 103:1-2", "text": "என் ஆத்துமாவே, கர்த்தரை ஸ்தோத்திரி; என் முழு உள்ளமே, அவருடைய பரிசுத்த நாமத்தை ஸ்தோத்திரி. என் ஆத்துமாவே, கர்த்தரை ஸ்தோத்திரி; அவர் செய்த சகல உபகாரங்களையும் மறவாதே."},
+    {"ref": "யோவான் 8:12", "text": "மறுபடியும் இயேசு ஜனங்களை நோக்கி: நான் உலகத்திற்கு வெளிச்சமாயிருக்கிறேன், என்னைப் பின்பற்றுகிறவன் இருளிலே நடவாமல் ஜீவவெளிச்சத்தை அடைந்திருப்பான் என்றார்."},
+    {"ref": "எபேசியர் 2:8", "text": "கிருபையினாலே விசுவாசத்தைக்கொண்டு இரட்சிக்கப்பட்டீர்கள்; இது உங்களால் உண்டானதல்ல, இது தேவனுடைய ஈவு."},
+    {"ref": "சங்கீதம் 16:11", "text": "ஜீவபாதையை எனக்குத் தெரியப்படுத்துவீர்; உம்முடைய சமுகத்தில் பரிபூரண ஆனந்தமும், உம்முடைய வலதுபாரிசத்தில் நித்திய பேரின்பமும் உண்டு."},
+    {"ref": "ரோமர் 12:2", "text": "நீங்கள் இந்தப் பிரபஞ்சத்திற்கு ஒத்த வேஷந்தரியாமல், தேவனுடைய நன்மையும் பிரியமும் பரிபூரணமுமான சித்தம் இன்னதென்று பகுத்தறியத்தக்கதாக, உங்கள் மனம் புதிதாகிறதினாலே மறுரூபமாகுங்கள்."},
+    {"ref": "வெளிப்படுத்தின விசேஷம் 21:4", "text": "அவர்களுடைய கண்ணீர் யாவையும் தேவன் துடைப்பார்; இனி மரணமுமில்லை, துக்கமுமில்லை, அலறுதலுமில்லை, வருத்தமுமில்லை; முந்தினவைகள் ஒழிந்துபோயின என்று விளம்பினது."}
   ];
 
   Map<String, dynamic> get _todayVerse {
-    final dayIndex = DateTime.now().day % _dailyVerses.length;
-    return _dailyVerses[dayIndex];
+    final dayOfMonth = DateTime.now().day; // 1 to 31
+    final index = (dayOfMonth - 1) % _dailyVerses.length;
+    return _dailyVerses[index];
   }
 
   @override
@@ -140,15 +167,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
-    _loadLastRead();
+    _loadState();
   }
 
-  Future<void> _loadLastRead() async {
+  Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
+      _isVerseExpanded = prefs.getBool('verse_banner_expanded') ?? true;
       _lastBookId = prefs.getInt('last_book_id');
       _lastChapter = prefs.getInt('last_chapter');
       _lastBookName = prefs.getString('last_book_name');
+    });
+  }
+
+  Future<void> _toggleVerseBanner() async {
+    final prefs = await SharedPreferences.getInstance();
+    final newState = !_isVerseExpanded;
+    await prefs.setBool('verse_banner_expanded', newState);
+    setState(() {
+      _isVerseExpanded = newState;
     });
   }
 
@@ -248,7 +285,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       appBar: AppBar(
         title: Row(
           children: [
-            // Clipped circular logo without borders
             Container(
               width: 36,
               height: 36,
@@ -301,14 +337,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
+          // Minimizable Daily Verse Banner
           Container(
             width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-            padding: const EdgeInsets.all(14),
+            margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Theme.of(context).colorScheme.primaryContainer,
+                  Theme.of(context).colorScheme.primaryContainer.withOpacity(0.8),
                   Theme.of(context).colorScheme.surfaceVariant,
                 ],
               ),
@@ -318,29 +355,78 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('🌟 இன்றைய வசனம்', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Icon(Icons.auto_awesome, size: 16, color: Colors.amber),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'இன்றைய வசனம்',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.share, size: 16),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
+                      tooltip: 'பகிர்',
                       onPressed: () {
                         Share.share('${_todayVerse["ref"]}\n"${_todayVerse["text"]}"\n- பரிசுத்த வேதாகமம்');
                       },
                     ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: Icon(_isVerseExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: _isVerseExpanded ? 'சுருக்கு' : 'விரிவாக்கு',
+                      onPressed: _toggleVerseBanner,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text('"${_todayVerse["text"]}"', style: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic)),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(_todayVerse["ref"], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 220),
+                  crossFadeState: _isVerseExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                  firstChild: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
+                      Text(
+                        '"${_todayVerse["text"]}"',
+                        style: const TextStyle(fontSize: 14.5, height: 1.45, fontStyle: FontStyle.italic),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _todayVerse["ref"],
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(
+                      '${_todayVerse["ref"]} - ${_todayVerse["text"]}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
+
+          // Last Read Bar
           if (_lastBookId != null && _lastChapter != null && _lastBookName != null)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -364,10 +450,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         totalChapters: _chapterCounts[targetBook.id] ?? 1,
                       ),
                     ),
-                  ).then((_) => _loadLastRead());
+                  ).then((_) => _loadState());
                 },
               ),
             ),
+
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -413,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               MaterialPageRoute(
                 builder: (_) => ReaderScreen(book: book, initialChapter: 1, totalChapters: totalChapters),
               ),
-            ).then((_) => _loadLastRead());
+            ).then((_) => _loadState());
           },
         );
       },
