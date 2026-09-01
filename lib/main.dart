@@ -946,7 +946,8 @@ class _ChapterViewState extends State<ChapterView> {
         return AnimatedBuilder(
           animation: TtsEngine.instance,
           builder: (context, _) {
-            final activeTtsIndex = (TtsEngine.instance.state == TtsState.playing)
+            final activeTtsIndex = (TtsEngine.instance.state == TtsState.playing ||
+                    TtsEngine.instance.state == TtsState.paused)
                 ? TtsEngine.instance.currentIndex
                 : null;
 

@@ -28,7 +28,9 @@ class TtsEngine extends ChangeNotifier {
     await _tts.setPitch(_pitch);
 
     _tts.setCompletionHandler(() {
-      _playNextVerse();
+      if (_state == TtsState.playing) {
+        _playNextVerse();
+      }
     });
 
     _tts.setErrorHandler((msg) {
@@ -37,8 +39,11 @@ class TtsEngine extends ChangeNotifier {
     });
 
     _tts.setCancelHandler(() {
-      _state = TtsState.stopped;
-      notifyListeners();
+      if (_state == TtsState.stopped) {
+        _verseQueue.clear();
+        _currentIndex = 0;
+        notifyListeners();
+      }
     });
   }
 
@@ -56,7 +61,7 @@ class TtsEngine extends ChangeNotifier {
     if (_currentIndex < _verseQueue.length && _state == TtsState.playing) {
       notifyListeners();
       await _tts.speak(_verseQueue[_currentIndex]);
-    } else {
+    } else if (_currentIndex >= _verseQueue.length) {
       stop();
     }
   }
