@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'db_helper.dart';
 import 'reading_plans.dart';
+import 'topical_data.dart';
 import 'tts_helper.dart';
 
 void main() {
@@ -117,11 +118,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Map<int, int> _chapterCounts = {};
   bool _loading = true;
   bool _isVerseExpanded = true;
+  int _streakCount = 1;
   int? _lastBookId;
   int? _lastChapter;
   String? _lastBookName;
 
-  // 31 Curated Daily Verses for Every Day of the Month
   final List<Map<String, dynamic>> _dailyVerses = const [
     {"ref": "சங்கீதம் 23:1", "text": "கர்த்தர் என் மேய்ப்பராயிருக்கிறார்; நான் தாழ்ச்சியடையேன்."},
     {"ref": "யோவான் 3:16", "text": "தேவன், உலகத்திலுள்ள எவரும் அழியாமல் நித்தியஜீவனை அடையும்படிக்கு, தம்முடைய ஒரேபேறான குமாரனைத் தந்தருளி, இவ்வளவாய் உலகத்தில் அன்புகூர்ந்தார்."},
@@ -157,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   ];
 
   Map<String, dynamic> get _todayVerse {
-    final dayOfMonth = DateTime.now().day; // 1 to 31
+    final dayOfMonth = DateTime.now().day;
     final index = (dayOfMonth - 1) % _dailyVerses.length;
     return _dailyVerses[index];
   }
@@ -168,6 +169,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
     _loadState();
+    _updateStreak();
+  }
+
+  Future<void> _updateStreak() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final lastDate = prefs.getString('last_active_date');
+    int currentStreak = prefs.getInt('active_streak') ?? 1;
+
+    if (lastDate != null && lastDate != today) {
+      final last = DateTime.tryParse(lastDate);
+      if (last != null) {
+        final diff = DateTime.now().difference(last).inDays;
+        if (diff == 1) {
+          currentStreak += 1;
+        } else if (diff > 1) {
+          currentStreak = 1;
+        }
+      }
+    }
+    await prefs.setString('last_active_date', today);
+    await prefs.setInt('active_streak', currentStreak);
+    if (mounted) setState(() => _streakCount = currentStreak);
   }
 
   Future<void> _loadState() async {
@@ -184,9 +208,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final prefs = await SharedPreferences.getInstance();
     final newState = !_isVerseExpanded;
     await prefs.setBool('verse_banner_expanded', newState);
-    setState(() {
-      _isVerseExpanded = newState;
-    });
+    setState(() => _isVerseExpanded = newState);
   }
 
   Future<void> _loadData() async {
@@ -283,24 +305,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                image: DecorationImage(
-                  image: AssetImage('assets/logo.png'),
-                  fit: BoxFit.contain,
-                ),
-              ),
+        title: Container(
+          width: 38,
+          height: 38,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            image: DecorationImage(
+              image: AssetImage('assets/logo.png'),
+              fit: BoxFit.contain,
             ),
-            const SizedBox(width: 10),
-            const Text('திருவிவிலியம்', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-          ],
+          ),
         ),
+        centerTitle: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.lightbulb_outline),
+            tooltip: 'வாழ்க்கை வழிகாட்டி (Topics)',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => TopicalGuideScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_note_outlined),
+            tooltip: 'குறிப்புகள் (Notes)',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => NotesListScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.calendar_month_outlined),
             tooltip: 'வாசிப்பு திட்டங்கள்',
@@ -337,7 +370,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
-          // Minimizable Daily Verse Banner
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
@@ -358,12 +390,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     const Icon(Icons.auto_awesome, size: 16, color: Colors.amber),
                     const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text(
-                        'இன்றைய வசனம்',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    const Text('இன்றைய வசனம்', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.deepOrange.shade100,
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: Text('🔥 $_streakCount நாள்', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                     ),
+                    const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.share, size: 16),
                       padding: EdgeInsets.zero,
@@ -390,43 +427,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 8),
-                      Text(
-                        '"${_todayVerse["text"]}"',
-                        style: const TextStyle(fontSize: 14.5, height: 1.45, fontStyle: FontStyle.italic),
-                      ),
+                      Text('"${_todayVerse["text"]}"', style: const TextStyle(fontSize: 14.5, height: 1.45, fontStyle: FontStyle.italic)),
                       const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: Text(
-                          _todayVerse["ref"],
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12.5,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
+                        child: Text(_todayVerse["ref"], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Theme.of(context).colorScheme.primary)),
                       ),
                     ],
                   ),
                   secondChild: Padding(
                     padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      '${_todayVerse["ref"]} - ${_todayVerse["text"]}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
+                    child: Text('${_todayVerse["ref"]} - ${_todayVerse["text"]}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: Theme.of(context).textTheme.bodySmall?.color, fontStyle: FontStyle.italic)),
                   ),
                 ),
               ],
             ),
           ),
-
-          // Last Read Bar
           if (_lastBookId != null && _lastChapter != null && _lastBookName != null)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -454,7 +470,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 },
               ),
             ),
-
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -512,12 +527,14 @@ class ReaderScreen extends StatefulWidget {
   final BookModel book;
   final int initialChapter;
   final int totalChapters;
+  final int? targetVerse;
 
   const ReaderScreen({
     super.key,
     required this.book,
     required this.initialChapter,
     required this.totalChapters,
+    this.targetVerse,
   });
 
   @override
@@ -747,6 +764,7 @@ class _ChapterViewState extends State<ChapterView> {
   }
 
   String _getKey(int verse) => 'hl_${widget.book.id}_${widget.chapter}_$verse';
+  String _getNoteKey(int verse) => 'note_${widget.book.id}_${widget.chapter}_$verse';
 
   Future<void> _loadHighlights() async {
     final prefs = await SharedPreferences.getInstance();
@@ -768,6 +786,53 @@ class _ChapterViewState extends State<ChapterView> {
       await prefs.setString(_getKey(verse), colorHex);
       setState(() => _highlights[verse] = colorHex);
     }
+  }
+
+  void _showAddNoteDialog(VerseModel verse) async {
+    final prefs = await SharedPreferences.getInstance();
+    final noteKey = _getNoteKey(verse.number);
+    final existingNote = prefs.getString(noteKey) ?? '';
+    final ctrl = TextEditingController(text: existingNote);
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${widget.book.name} ${widget.chapter}:${verse.number} - குறிப்பு'),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 4,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'உங்கள் தியானக் குறிப்பை இங்கே எழுதுங்கள்...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          if (existingNote.isNotEmpty)
+            TextButton(
+              child: const Text('நீக்கு', style: TextStyle(color: Colors.red)),
+              onPressed: () async {
+                await prefs.remove(noteKey);
+                if (ctx.mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('குறிப்பு நீக்கப்பட்டது')));
+              },
+            ),
+          TextButton(
+            child: const Text('சேமி'),
+            onPressed: () async {
+              if (ctrl.text.trim().isNotEmpty) {
+                await prefs.setString(noteKey, ctrl.text.trim());
+                if (ctx.mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('குறிப்பு சேமிக்கப்பட்டது')));
+              } else {
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   void _showVerseActions(VerseModel verse) {
@@ -794,10 +859,18 @@ class _ChapterViewState extends State<ChapterView> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.volume_up),
-                      tooltip: 'இந்த வசனத்தை வாசி',
+                      tooltip: 'வாசி',
                       onPressed: () {
                         TtsEngine.instance.startChapter([verse.text]);
                         Navigator.pop(ctx);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_note),
+                      tooltip: 'குறிப்பு சேர்',
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showAddNoteDialog(verse);
                       },
                     ),
                     IconButton(
@@ -870,41 +943,58 @@ class _ChapterViewState extends State<ChapterView> {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final verses = snapshot.data!;
 
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          itemCount: verses.length,
-          itemBuilder: (context, index) {
-            final v = verses[index];
-            final hlColor = _getHighlightColor(v.number);
+        return AnimatedBuilder(
+          animation: TtsEngine.instance,
+          builder: (context, _) {
+            final activeTtsIndex = (TtsEngine.instance.state == TtsState.playing)
+                ? TtsEngine.instance.currentIndex
+                : null;
 
-            return InkWell(
-              onTap: () => _showVerseActions(v),
-              onLongPress: () => _showVerseActions(v),
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 2.0),
-                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                decoration: BoxDecoration(color: hlColor, borderRadius: BorderRadius.circular(6)),
-                child: RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: widget.fontSize,
-                      height: 1.65,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: verses.length,
+              itemBuilder: (context, index) {
+                final v = verses[index];
+                final isTtsActive = activeTtsIndex == index;
+                final hlColor = isTtsActive
+                    ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.8)
+                    : _getHighlightColor(v.number);
+
+                return InkWell(
+                  onTap: () => _showVerseActions(v),
+                  onLongPress: () => _showVerseActions(v),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(vertical: 2.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                    decoration: BoxDecoration(
+                      color: hlColor,
+                      borderRadius: BorderRadius.circular(6),
+                      border: isTtsActive ? Border.all(color: Theme.of(context).colorScheme.primary) : null,
                     ),
-                    children: [
-                      TextSpan(
-                        text: '${v.number} ',
+                    child: RichText(
+                      text: TextSpan(
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: widget.fontSize * 0.85,
+                          fontSize: widget.fontSize,
+                          height: 1.65,
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
                         ),
+                        children: [
+                          TextSpan(
+                            text: '${v.number} ',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: widget.fontSize * 0.85,
+                            ),
+                          ),
+                          TextSpan(text: v.text),
+                        ],
                       ),
-                      TextSpan(text: v.text),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         );
@@ -913,68 +1003,151 @@ class _ChapterViewState extends State<ChapterView> {
   }
 }
 
-class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+class TopicalGuideScreen extends StatelessWidget {
+  final List<BookModel> allBooks;
+  final Map<int, int> chapterCounts;
+
+  const TopicalGuideScreen({super.key, required this.allBooks, required this.chapterCounts});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  Widget build(BuildContext context) {
+    final topics = TopicalData.getTopics();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('வாழ்க்கை வழிகாட்டி (Topics)')),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: topics.length,
+        itemBuilder: (context, index) {
+          final item = topics[index];
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ExpansionTile(
+              leading: Text(item.icon, style: const TextStyle(fontSize: 24)),
+              title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              children: item.verses.map((v) {
+                return ListTile(
+                  title: Text('${v.bookName} ${v.chapter}:${v.verse}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text(v.summaryTa),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                  onTap: () {
+                    final targetBook = allBooks.firstWhere((b) => b.id == v.bookId, orElse: () => allBooks.first);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReaderScreen(
+                          book: targetBook,
+                          initialChapter: v.chapter,
+                          totalChapters: chapterCounts[targetBook.id] ?? 1,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }).toList(),
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
-class _SearchScreenState extends State<SearchScreen> {
-  final TextEditingController _ctrl = TextEditingController();
-  List<Map<String, dynamic>> _results = [];
-  bool _searching = false;
+class NotesListScreen extends StatefulWidget {
+  final List<BookModel> allBooks;
+  final Map<int, int> chapterCounts;
 
-  void _doSearch(String text) async {
-    if (text.trim().isEmpty) return;
-    setState(() => _searching = true);
-    final res = await DatabaseHelper.searchTamil(text.trim());
+  const NotesListScreen({super.key, required this.allBooks, required this.chapterCounts});
+
+  @override
+  State<NotesListScreen> createState() => _NotesListScreenState();
+}
+
+class _NotesListScreenState extends State<NotesListScreen> {
+  List<Map<String, dynamic>> _savedNotes = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllNotes();
+  }
+
+  Future<void> _loadAllNotes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('note_'));
+    final List<Map<String, dynamic>> list = [];
+
+    for (var k in keys) {
+      final parts = k.split('_');
+      if (parts.length == 4) {
+        final bookId = int.parse(parts[1]);
+        final ch = int.parse(parts[2]);
+        final verseNum = int.parse(parts[3]);
+        final noteText = prefs.getString(k) ?? '';
+        final book = widget.allBooks.firstWhere((b) => b.id == bookId, orElse: () => widget.allBooks.first);
+        final verseText = await DatabaseHelper.getSingleVerseText(bookId, ch, verseNum);
+
+        list.add({
+          "key": k,
+          "book": book,
+          "book_id": bookId,
+          "chapter": ch,
+          "verse": verseNum,
+          "note": noteText,
+          "verse_text": verseText ?? '',
+        });
+      }
+    }
+
     setState(() {
-      _results = res;
-      _searching = false;
+      _savedNotes = list;
+      _loading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'தேடுங்கள் (எ.கா: வெளிச்சம்)...', border: InputBorder.none),
-          onSubmitted: _doSearch,
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () => _doSearch(_ctrl.text)),
-        ],
-      ),
-      body: _searching
+      appBar: AppBar(title: const Text('என் குறிப்புகள் (Notes)')),
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.separated(
-              itemCount: _results.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final item = _results[index];
-                return ListTile(
-                  title: Text('${item['name_ta']} ${item['chapter']}:${item['verse']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(item['text_ta']),
-                  onTap: () async {
-                    final books = await DatabaseHelper.getBooks();
-                    final book = books.firstWhere((b) => b.id == item['book_id']);
-                    final chapters = await DatabaseHelper.getChapters(book.id);
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ReaderScreen(book: book, initialChapter: item['chapter'], totalChapters: chapters.length),
-                        ),
-                      );
-                    }
+          : _savedNotes.isEmpty
+              ? const Center(child: Text('குறிப்புகள் ஏதும் எழுதப்படவில்லை.'))
+              : ListView.separated(
+                  itemCount: _savedNotes.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = _savedNotes[index];
+                    final book = item["book"] as BookModel;
+
+                    return ListTile(
+                      title: Text('${book.name} ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('📝 ${item["note"]}', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.blueAccent)),
+                          const SizedBox(height: 2),
+                          Text('"${item["verse_text"]}"', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontStyle: FontStyle.italic)),
+                        ],
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ReaderScreen(
+                              book: book,
+                              initialChapter: item["chapter"],
+                              totalChapters: widget.chapterCounts[book.id] ?? 1,
+                            ),
+                          ),
+                        ).then((_) => _loadAllNotes());
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
     );
   }
 }
@@ -1279,6 +1452,72 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   ),
                 ),
               ],
+            ),
+    );
+  }
+}
+
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
+  final TextEditingController _ctrl = TextEditingController();
+  List<Map<String, dynamic>> _results = [];
+  bool _searching = false;
+
+  void _doSearch(String text) async {
+    if (text.trim().isEmpty) return;
+    setState(() => _searching = true);
+    final res = await DatabaseHelper.searchTamil(text.trim());
+    setState(() {
+      _results = res;
+      _searching = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: TextField(
+          controller: _ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'தேடுங்கள் (எ.கா: வெளிச்சம்)...', border: InputBorder.none),
+          onSubmitted: _doSearch,
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.search), onPressed: () => _doSearch(_ctrl.text)),
+        ],
+      ),
+      body: _searching
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.separated(
+              itemCount: _results.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final item = _results[index];
+                return ListTile(
+                  title: Text('${item['name_ta']} ${item['chapter']}:${item['verse']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(item['text_ta']),
+                  onTap: () async {
+                    final books = await DatabaseHelper.getBooks();
+                    final book = books.firstWhere((b) => b.id == item['book_id']);
+                    final chapters = await DatabaseHelper.getChapters(book.id);
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReaderScreen(book: book, initialChapter: item['chapter'], totalChapters: chapters.length),
+                        ),
+                      );
+                    }
+                  },
+                );
+              },
             ),
     );
   }
