@@ -28,6 +28,10 @@ jobs:
       - name: Scaffold Android Wrapper
         run: flutter create . --org com.tamilbible.app --platforms android
 
+      - name: Set Android App Label
+        run: |
+          sed -i 's/android:label="tamil_bible_app"/android:label="திருவிவிலியம்"/g' android/app/src/main/AndroidManifest.xml
+
       - name: Fix Kotlin Duplicate Class Resolution
         run: |
           cat << 'EOF' >> android/app/build.gradle

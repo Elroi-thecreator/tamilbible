@@ -87,7 +87,7 @@ class TamilBibleApp extends StatelessWidget {
             theme = ThemeData(
               useMaterial3: true,
               scaffoldBackgroundColor: const Color(0xFFFAFAFA),
-              colorSchemeSeed: const Color(0xFF4A148C),
+              colorSchemeSeed: const Color(0xFF0288D1),
               textTheme: AppSettings.instance.getTextTheme(Brightness.light),
             );
             break;
@@ -248,14 +248,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       appBar: AppBar(
         title: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/logo.png',
-                height: 34,
-                width: 34,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.menu_book, size: 28),
+            // Clipped circular logo without borders
+            Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(
+                  image: AssetImage('assets/logo.png'),
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -520,9 +522,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Future<void> _startReadingFullChapter() async {
     final verses = await DatabaseHelper.getVerses(widget.book.id, _currentChapter);
-    // Skips verse numbers, reading continuous Tamil scripture smoothly
-    final text = verses.map((v) => v.text.trim()).join(' ');
-    await TtsEngine.instance.speakText(text);
+    final texts = verses.map((v) => v.text.trim()).toList();
+    await TtsEngine.instance.startChapter(texts);
   }
 
   @override
@@ -583,6 +584,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         onPressed: () {
                           if (isPlaying) {
                             TtsEngine.instance.pause();
+                          } else if (TtsEngine.instance.state == TtsState.paused) {
+                            TtsEngine.instance.resume();
                           } else {
                             _startReadingFullChapter();
                           }
@@ -706,7 +709,7 @@ class _ChapterViewState extends State<ChapterView> {
                       icon: const Icon(Icons.volume_up),
                       tooltip: 'இந்த வசனத்தை வாசி',
                       onPressed: () {
-                        TtsEngine.instance.speakText(verse.text, verseNumber: verse.number);
+                        TtsEngine.instance.startChapter([verse.text]);
                         Navigator.pop(ctx);
                       },
                     ),
