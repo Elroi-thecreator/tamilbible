@@ -49,6 +49,34 @@ class AppSettings extends ChangeNotifier {
     await prefs.setInt('bible_language_mode', mode.index);
   }
 
+  void cycleLanguageMode() {
+    final nextIndex = (languageMode.index + 1) % BibleLanguageMode.values.length;
+    setLanguageMode(BibleLanguageMode.values[nextIndex]);
+  }
+
+  String get languageBadgeLabel {
+    switch (languageMode) {
+      case BibleLanguageMode.tamil:
+        return 'தமிழ்';
+      case BibleLanguageMode.english:
+        return 'KJV';
+      case BibleLanguageMode.combined:
+        return 'இணை';
+    }
+  }
+
+  String getBookDisplayName(BookModel book) {
+    switch (languageMode) {
+      case BibleLanguageMode.english:
+        return book.nameEn;
+      case BibleLanguageMode.combined:
+        return '${book.name} (${book.nameEn})';
+      case BibleLanguageMode.tamil:
+      default:
+        return book.name;
+    }
+  }
+
   TextTheme getTextTheme(Brightness brightness) {
     final base = brightness == Brightness.dark ? ThemeData.dark().textTheme : ThemeData.light().textTheme;
     switch (fontOption) {
@@ -137,7 +165,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   int _streakCount = 1;
   int? _lastBookId;
   int? _lastChapter;
-  String? _lastBookName;
 
   final List<Map<String, dynamic>> _dailyVerses = const [
     {"ref": "சங்கீதம் 23:1", "text": "கர்த்தர் என் மேய்ப்பராயிருக்கிறார்; நான் தாழ்ச்சியடையேன்."},
@@ -216,7 +243,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _isVerseExpanded = prefs.getBool('verse_banner_expanded') ?? true;
       _lastBookId = prefs.getInt('last_book_id');
       _lastChapter = prefs.getInt('last_chapter');
-      _lastBookName = prefs.getString('last_book_name');
     });
   }
 
@@ -319,34 +345,51 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final otBooks = _allBooks.where((b) => b.testament == 'OT').toList();
     final ntBooks = _allBooks.where((b) => b.testament == 'NT').toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                image: DecorationImage(
-                  image: AssetImage('assets/logo.png'),
-                  fit: BoxFit.contain,
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) {
+        final langMode = AppSettings.instance.languageMode;
+
+        final otTabTitle = langMode == BibleLanguageMode.english
+            ? 'Old Testament (OT)'
+            : (langMode == BibleLanguageMode.combined
+                ? 'பழைய ஏற்பாடு (OT)'
+                : 'பழைய ஏற்பாடு');
+
+        final ntTabTitle = langMode == BibleLanguageMode.english
+            ? 'New Testament (NT)'
+            : (langMode == BibleLanguageMode.combined
+                ? 'புதிய ஏற்பாடு (NT)'
+                : 'புதிய ஏற்பாடு');
+
+        BookModel? lastBook;
+        if (_lastBookId != null) {
+          lastBook = _allBooks.firstWhere((b) => b.id == _lastBookId, orElse: () => _allBooks.first);
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: AssetImage('assets/logo.png'),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Landing-page Language Selector Segmented Buttons
-            AnimatedBuilder(
-              animation: AppSettings.instance,
-              builder: (context, _) {
-                final currentMode = AppSettings.instance.languageMode;
-                return SegmentedButton<BibleLanguageMode>(
+                const SizedBox(width: 8),
+                SegmentedButton<BibleLanguageMode>(
                   showSelectedIcon: false,
                   style: SegmentedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 0),
                   ),
                   segments: const [
                     ButtonSegment(
@@ -362,196 +405,229 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       label: Text('இணைந்தது', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
-                  selected: {currentMode},
+                  selected: {langMode},
                   onSelectionChanged: (newSelection) {
                     AppSettings.instance.setLanguageMode(newSelection.first);
                   },
-                );
-              },
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.lightbulb_outline),
-            tooltip: 'வாழ்க்கை வழிகாட்டி (Topics)',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => TopicalGuideScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_note_outlined),
-            tooltip: 'குறிப்புகள் (Notes)',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => NotesListScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: 'வாசிப்பு திட்டங்கள்',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => PlansListScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.bookmarks_outlined),
-            tooltip: 'குறித்த வசனங்கள்',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => HighlightsScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.palette_outlined),
-            onPressed: _openAppearanceDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Theme.of(context).colorScheme.primary,
-          tabs: const [
-            Tab(text: 'பழைய ஏற்பாடு (OT)'),
-            Tab(text: 'புதிய ஏற்பாடு (NT)'),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primaryContainer.withOpacity(0.8),
-                  Theme.of(context).colorScheme.surfaceVariant,
-                ],
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.lightbulb_outline),
+                tooltip: 'வாழ்க்கை வழிகாட்டி (Topics)',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => TopicalGuideScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+                ),
               ),
-              borderRadius: BorderRadius.circular(12),
+              IconButton(
+                icon: const Icon(Icons.edit_note_outlined),
+                tooltip: 'குறிப்புகள் (Notes)',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => NotesListScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.calendar_month_outlined),
+                tooltip: 'வாசிப்பு திட்டங்கள்',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => PlansListScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.bookmarks_outlined),
+                tooltip: 'குறித்த வசனங்கள்',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => HighlightsScreen(allBooks: _allBooks, chapterCounts: _chapterCounts)),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.palette_outlined),
+                onPressed: _openAppearanceDialog,
+              ),
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+              ),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              tabs: [
+                Tab(text: otTabTitle),
+                Tab(text: ntTabTitle),
+              ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          ),
+          body: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primaryContainer.withOpacity(0.8),
+                      Theme.of(context).colorScheme.surfaceVariant,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.auto_awesome, size: 16, color: Colors.amber),
-                    const SizedBox(width: 6),
-                    const Text('இன்றைய வசனம்', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.deepOrange.shade100,
-                        borderRadius: BorderRadius.circular(8),
+                    Row(
+                      children: [
+                        const Icon(Icons.auto_awesome, size: 16, color: Colors.amber),
+                        const SizedBox(width: 6),
+                        Text(
+                          langMode == BibleLanguageMode.english ? 'Verse of the Day' : 'இன்றைய வசனம்',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.deepOrange.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            langMode == BibleLanguageMode.english ? '🔥 $_streakCount Days' : '🔥 $_streakCount நாள்',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.share, size: 16),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'பகிர்',
+                          onPressed: () {
+                            Share.share('${_todayVerse["ref"]}\n"${_todayVerse["text"]}"\n- பரிசுத்த வேதாகமம்');
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: Icon(_isVerseExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: _isVerseExpanded ? 'சுருக்கு' : 'விரிவாக்கு',
+                          onPressed: _toggleVerseBanner,
+                        ),
+                      ],
+                    ),
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 220),
+                      crossFadeState: _isVerseExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                      firstChild: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
+                          Text(
+                            '"${_todayVerse["text"]}"',
+                            style: const TextStyle(fontSize: 14.5, height: 1.45, fontStyle: FontStyle.italic),
+                          ),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              _todayVerse["ref"],
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text('🔥 $_streakCount நாள்', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.share, size: 16),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: 'பகிர்',
-                      onPressed: () {
-                        Share.share('${_todayVerse["ref"]}\n"${_todayVerse["text"]}"\n- பரிசுத்த வேதாகமம்');
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: Icon(_isVerseExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: _isVerseExpanded ? 'சுருக்கு' : 'விரிவாக்கு',
-                      onPressed: _toggleVerseBanner,
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          '${_todayVerse["ref"]} - ${_todayVerse["text"]}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 220),
-                  crossFadeState: _isVerseExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                  firstChild: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      Text('"${_todayVerse["text"]}"', style: const TextStyle(fontSize: 14.5, height: 1.45, fontStyle: FontStyle.italic)),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(_todayVerse["ref"], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Theme.of(context).colorScheme.primary)),
-                      ),
-                    ],
+              ),
+              if (lastBook != null && _lastChapter != null)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  secondChild: Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text('${_todayVerse["ref"]} - ${_todayVerse["text"]}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: Theme.of(context).textTheme.bodySmall?.color, fontStyle: FontStyle.italic)),
+                  child: ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.history, size: 20),
+                    title: Text(
+                      langMode == BibleLanguageMode.english
+                          ? 'Last read: ${AppSettings.instance.getBookDisplayName(lastBook)} $_lastChapter'
+                          : 'கடைசியாக வாசித்தது: ${AppSettings.instance.getBookDisplayName(lastBook)} $_lastChapter',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReaderScreen(
+                            book: lastBook!,
+                            initialChapter: _lastChapter!,
+                            totalChapters: _chapterCounts[lastBook.id] ?? 1,
+                          ),
+                        ),
+                      ).then((_) => _loadState());
+                    },
                   ),
                 ),
-              ],
-            ),
-          ),
-          if (_lastBookId != null && _lastChapter != null && _lastBookName != null)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(10),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildBookList(otBooks),
+                    _buildBookList(ntBooks),
+                  ],
+                ),
               ),
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.history, size: 20),
-                title: Text('கடைசியாக வாசித்தது: $_lastBookName $_lastChapter', style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                onTap: () {
-                  final targetBook = _allBooks.firstWhere((b) => b.id == _lastBookId);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ReaderScreen(
-                        book: targetBook,
-                        initialChapter: _lastChapter!,
-                        totalChapters: _chapterCounts[targetBook.id] ?? 1,
-                      ),
-                    ),
-                  ).then((_) => _loadState());
-                },
-              ),
-            ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildBookList(otBooks),
-                _buildBookList(ntBooks),
-              ],
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildBookList(List<BookModel> books) {
+    final langMode = AppSettings.instance.languageMode;
+    final suffix = langMode == BibleLanguageMode.english ? 'Ch.' : 'அதி.';
+
     return ListView.separated(
       itemCount: books.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final book = books[index];
         final totalChapters = _chapterCounts[book.id] ?? 1;
+        final displayName = AppSettings.instance.getBookDisplayName(book);
 
         return ListTile(
           leading: CircleAvatar(
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             child: Text('${book.id}', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onPrimaryContainer)),
           ),
-          title: Text(book.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+          title: Text(displayName, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w600)),
           trailing: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
@@ -559,7 +635,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '$totalChapters அதி.',
+              '$totalChapters $suffix',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
@@ -613,7 +689,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('last_book_id', widget.book.id);
     await prefs.setInt('last_chapter', ch);
-    await prefs.setString('last_book_name', widget.book.name);
   }
 
   @override
@@ -624,6 +699,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _showChapterBottomSheet() {
+    final bookTitle = AppSettings.instance.getBookDisplayName(widget.book);
+    final headerTitle = AppSettings.instance.languageMode == BibleLanguageMode.english
+        ? '$bookTitle - Chapters'
+        : '$bookTitle - அதிகாரங்கள்';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
@@ -633,7 +713,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${widget.book.name} - அதிகாரங்கள்', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(headerTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Expanded(
               child: GridView.builder(
@@ -678,6 +758,56 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  void _showLanguageSelectorDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                child: Text('மொழி தேர்வு (Language Mode)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ),
+              const Divider(),
+              RadioListTile<BibleLanguageMode>(
+                title: const Text('தமிழ் மட்டும் (Tamil Only)'),
+                value: BibleLanguageMode.tamil,
+                groupValue: AppSettings.instance.languageMode,
+                onChanged: (val) {
+                  if (val != null) AppSettings.instance.setLanguageMode(val);
+                  Navigator.pop(ctx);
+                },
+              ),
+              RadioListTile<BibleLanguageMode>(
+                title: const Text('English Only (KJV)'),
+                value: BibleLanguageMode.english,
+                groupValue: AppSettings.instance.languageMode,
+                onChanged: (val) {
+                  if (val != null) AppSettings.instance.setLanguageMode(val);
+                  Navigator.pop(ctx);
+                },
+              ),
+              RadioListTile<BibleLanguageMode>(
+                title: const Text('தமிழ் + KJV English (இணைந்தது)'),
+                value: BibleLanguageMode.combined,
+                groupValue: AppSettings.instance.languageMode,
+                onChanged: (val) {
+                  if (val != null) AppSettings.instance.setLanguageMode(val);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _startReadingFullChapter() async {
     final verses = await DatabaseHelper.getVerses(widget.book.id, _currentChapter);
     final isEnglishOnly = AppSettings.instance.languageMode == BibleLanguageMode.english;
@@ -689,117 +819,153 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: InkWell(
-          onTap: _showChapterBottomSheet,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('${widget.book.name} $_currentChapter', style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(_audioBarVisible ? Icons.volume_up : Icons.volume_up_outlined),
-            tooltip: 'குரல் வாசிப்பு (TTS Audio)',
-            onPressed: () {
-              setState(() => _audioBarVisible = !_audioBarVisible);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_decrease),
-            onPressed: () => setState(() => _fontSize = (_fontSize - 2).clamp(14.0, 32.0)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_increase),
-            onPressed: () => setState(() => _fontSize = (_fontSize + 2).clamp(14.0, 32.0)),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (_audioBarVisible)
-            AnimatedBuilder(
-              animation: TtsEngine.instance,
-              builder: (context, _) {
-                final isPlaying = TtsEngine.instance.state == TtsState.playing;
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) {
+        final bookTitle = AppSettings.instance.getBookDisplayName(widget.book);
 
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        return Scaffold(
+          appBar: AppBar(
+            title: InkWell(
+              onTap: _showChapterBottomSheet,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$bookTitle $_currentChapter', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_drop_down),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => AppSettings.instance.cycleLanguageMode(),
+                onLongPress: _showLanguageSelectorDialog,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4),
-                    border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton.filled(
-                        icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                        onPressed: () {
-                          if (isPlaying) {
-                            TtsEngine.instance.pause();
-                          } else if (TtsEngine.instance.state == TtsState.paused) {
-                            TtsEngine.instance.resume();
-                          } else {
-                            _startReadingFullChapter();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.stop),
-                        onPressed: () => TtsEngine.instance.stop(),
-                      ),
-                      const Spacer(),
-                      const Text('வேகம்: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      DropdownButton<double>(
-                        value: TtsEngine.instance.speechRate,
-                        isDense: true,
-                        underline: const SizedBox(),
-                        items: const [
-                          DropdownMenuItem(value: 0.35, child: Text('0.75x')),
-                          DropdownMenuItem(value: 0.45, child: Text('1.0x')),
-                          DropdownMenuItem(value: 0.55, child: Text('1.25x')),
-                          DropdownMenuItem(value: 0.65, child: Text('1.5x')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) TtsEngine.instance.setRate(val);
-                        },
+                      const Icon(Icons.translate, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        AppSettings.instance.languageBadgeLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.totalChapters,
-              onPageChanged: (pageIndex) {
-                final ch = pageIndex + 1;
-                setState(() => _currentChapter = ch);
-                _saveLastRead(ch);
-                TtsEngine.instance.stop();
-              },
-              itemBuilder: (context, pageIndex) {
-                final chapter = pageIndex + 1;
-                return ChapterView(
-                  book: widget.book,
-                  chapter: chapter,
-                  fontSize: _fontSize,
-                );
-              },
-            ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(_audioBarVisible ? Icons.volume_up : Icons.volume_up_outlined),
+                tooltip: 'குரல் வாசிப்பு (TTS Audio)',
+                onPressed: () {
+                  setState(() => _audioBarVisible = !_audioBarVisible);
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.text_decrease),
+                onPressed: () => setState(() => _fontSize = (_fontSize - 2).clamp(14.0, 32.0)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.text_increase),
+                onPressed: () => setState(() => _fontSize = (_fontSize + 2).clamp(14.0, 32.0)),
+              ),
+            ],
           ),
-        ],
-      ),
+          body: Column(
+            children: [
+              if (_audioBarVisible)
+                AnimatedBuilder(
+                  animation: TtsEngine.instance,
+                  builder: (context, _) {
+                    final isPlaying = TtsEngine.instance.state == TtsState.playing;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4),
+                        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton.filled(
+                            icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                            onPressed: () {
+                              if (isPlaying) {
+                                TtsEngine.instance.pause();
+                              } else if (TtsEngine.instance.state == TtsState.paused) {
+                                TtsEngine.instance.resume();
+                              } else {
+                                _startReadingFullChapter();
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.stop),
+                            onPressed: () => TtsEngine.instance.stop(),
+                          ),
+                          const Spacer(),
+                          const Text('Speed: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          DropdownButton<double>(
+                            value: TtsEngine.instance.speechRate,
+                            isDense: true,
+                            underline: const SizedBox(),
+                            items: const [
+                              DropdownMenuItem(value: 0.35, child: Text('0.75x')),
+                              DropdownMenuItem(value: 0.45, child: Text('1.0x')),
+                              DropdownMenuItem(value: 0.55, child: Text('1.25x')),
+                              DropdownMenuItem(value: 0.65, child: Text('1.5x')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) TtsEngine.instance.setRate(val);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.totalChapters,
+                  onPageChanged: (pageIndex) {
+                    final ch = pageIndex + 1;
+                    setState(() => _currentChapter = ch);
+                    _saveLastRead(ch);
+                    TtsEngine.instance.stop();
+                  },
+                  itemBuilder: (context, pageIndex) {
+                    final chapter = pageIndex + 1;
+                    return ChapterView(
+                      book: widget.book,
+                      chapter: chapter,
+                      fontSize: _fontSize,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -859,38 +1025,39 @@ class _ChapterViewState extends State<ChapterView> {
     final noteKey = _getNoteKey(verse.number);
     final existingNote = prefs.getString(noteKey) ?? '';
     final ctrl = TextEditingController(text: existingNote);
+    final bookTitle = AppSettings.instance.getBookDisplayName(widget.book);
 
     if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${widget.book.name} ${widget.chapter}:${verse.number} - குறிப்பு'),
+        title: Text('$bookTitle ${widget.chapter}:${verse.number} - Note'),
         content: TextField(
           controller: ctrl,
           maxLines: 4,
           autofocus: true,
           decoration: const InputDecoration(
-            hintText: 'உங்கள் தியானக் குறிப்பை இங்கே எழுதுங்கள்...',
+            hintText: 'Enter your reflection or study note here...',
             border: OutlineInputBorder(),
           ),
         ),
         actions: [
           if (existingNote.isNotEmpty)
             TextButton(
-              child: const Text('நீக்கு', style: TextStyle(color: Colors.red)),
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
               onPressed: () async {
                 await prefs.remove(noteKey);
                 if (ctx.mounted) Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('குறிப்பு நீக்கப்பட்டது')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note deleted')));
               },
             ),
           TextButton(
-            child: const Text('சேமி'),
+            child: const Text('Save'),
             onPressed: () async {
               if (ctrl.text.trim().isNotEmpty) {
                 await prefs.setString(noteKey, ctrl.text.trim());
                 if (ctx.mounted) Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('குறிப்பு சேமிக்கப்பட்டது')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note saved')));
               } else {
                 if (ctx.mounted) Navigator.pop(ctx);
               }
@@ -903,11 +1070,13 @@ class _ChapterViewState extends State<ChapterView> {
 
   void _showVerseActions(VerseModel verse) {
     final langMode = AppSettings.instance.languageMode;
+    final bookTitle = AppSettings.instance.getBookDisplayName(widget.book);
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
-        final reference = '${widget.book.name} ${widget.chapter}:${verse.number}';
+        final reference = '$bookTitle ${widget.chapter}:${verse.number}';
         String fullText = '';
         if (langMode == BibleLanguageMode.tamil) {
           fullText = '$reference\n"${verse.text}"';
@@ -936,7 +1105,7 @@ class _ChapterViewState extends State<ChapterView> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.volume_up),
-                      tooltip: 'வாசி',
+                      tooltip: 'Listen',
                       onPressed: () {
                         final speakText = (langMode == BibleLanguageMode.english && verse.textEn != null && verse.textEn!.isNotEmpty)
                             ? verse.textEn!
@@ -947,7 +1116,7 @@ class _ChapterViewState extends State<ChapterView> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.edit_note),
-                      tooltip: 'குறிப்பு சேர்',
+                      tooltip: 'Note',
                       onPressed: () {
                         Navigator.pop(ctx);
                         _showAddNoteDialog(verse);
@@ -955,16 +1124,16 @@ class _ChapterViewState extends State<ChapterView> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.copy),
-                      tooltip: 'நகலெடு',
+                      tooltip: 'Copy',
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: fullText));
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('வசனம் நகலெடுக்கப்பட்டது')));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verse copied to clipboard')));
                       },
                     ),
                     IconButton(
                       icon: const Icon(Icons.share),
-                      tooltip: 'பகிர்',
+                      tooltip: 'Share',
                       onPressed: () {
                         Share.share(fullText);
                         Navigator.pop(ctx);
@@ -973,7 +1142,7 @@ class _ChapterViewState extends State<ChapterView> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text('ஹைலைட் வண்ணம்:', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Highlight Color:', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1057,7 +1226,6 @@ class _ChapterViewState extends State<ChapterView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Tamil Verse (Shown for Tamil and Combined modes)
                         if (langMode != BibleLanguageMode.english)
                           RichText(
                             text: TextSpan(
@@ -1079,8 +1247,6 @@ class _ChapterViewState extends State<ChapterView> {
                               ],
                             ),
                           ),
-
-                        // English KJV Verse (Shown for English and Combined modes)
                         if (langMode != BibleLanguageMode.tamil && v.textEn != null && v.textEn!.isNotEmpty) ...[
                           if (langMode == BibleLanguageMode.combined) const SizedBox(height: 3),
                           Padding(
@@ -1148,12 +1314,14 @@ class TopicalGuideScreen extends StatelessWidget {
               leading: Text(item.icon, style: const TextStyle(fontSize: 24)),
               title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
               children: item.verses.map((v) {
+                final targetBook = allBooks.firstWhere((b) => b.id == v.bookId, orElse: () => allBooks.first);
+                final bookTitle = AppSettings.instance.getBookDisplayName(targetBook);
+
                 return ListTile(
-                  title: Text('${v.bookName} ${v.chapter}:${v.verse}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  title: Text('$bookTitle ${v.chapter}:${v.verse}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   subtitle: Text(v.summaryTa),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                   onTap: () {
-                    final targetBook = allBooks.firstWhere((b) => b.id == v.bookId, orElse: () => allBooks.first);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -1242,9 +1410,10 @@ class _NotesListScreenState extends State<NotesListScreen> {
                   itemBuilder: (context, index) {
                     final item = _savedNotes[index];
                     final book = item["book"] as BookModel;
+                    final bookTitle = AppSettings.instance.getBookDisplayName(book);
 
                     return ListTile(
-                      title: Text('${book.name} ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text('$bookTitle ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1340,11 +1509,12 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                   itemBuilder: (context, index) {
                     final item = _savedVerses[index];
                     final book = item["book"] as BookModel;
+                    final bookTitle = AppSettings.instance.getBookDisplayName(book);
                     final Color? bg = item["colorHex"] != null ? Color(int.parse(item["colorHex"])) : null;
 
                     return ListTile(
                       tileColor: bg?.withOpacity(0.35),
-                      title: Text('${book.name} ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text('$bookTitle ${item["chapter"]}:${item["verse"]}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(item["text"]),
                       trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                       onTap: () {
@@ -1602,12 +1772,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final langMode = AppSettings.instance.languageMode;
+    final hint = langMode == BibleLanguageMode.english ? 'Search verses...' : 'தேடுங்கள் (எ.கா: வெளிச்சம்)...';
+
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'தேடுங்கள் (எ.கா: வெளிச்சம்)...', border: InputBorder.none),
+          decoration: InputDecoration(hintText: hint, border: InputBorder.none),
           onSubmitted: _doSearch,
         ),
         actions: [

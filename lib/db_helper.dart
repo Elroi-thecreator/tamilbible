@@ -6,14 +6,43 @@ import 'package:sqflite/sqflite.dart';
 class BookModel {
   final int id;
   final String name;
+  final String nameEn;
   final String testament;
 
-  BookModel({required this.id, required this.name, required this.testament});
+  BookModel({
+    required this.id,
+    required this.name,
+    required this.nameEn,
+    required this.testament,
+  });
+
+  static const List<String> canonicalEnglishNames = [
+    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
+    "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
+    "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
+    "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
+    "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations",
+    "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
+    "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk",
+    "Zephaniah", "Haggai", "Zechariah", "Malachi",
+    "Matthew", "Mark", "Luke", "John", "Acts",
+    "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
+    "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy",
+    "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
+    "1 Peter", "2 Peter", "1 John", "2 John", "3 John",
+    "Jude", "Revelation"
+  ];
 
   factory BookModel.fromMap(Map<String, dynamic> map) {
+    final bookId = map['id'] as int;
+    final fallbackEn = (bookId >= 1 && bookId <= 66)
+        ? canonicalEnglishNames[bookId - 1]
+        : 'Book $bookId';
+
     return BookModel(
-      id: map['id'] as int,
+      id: bookId,
       name: (map['name_ta'] ?? map['name'] ?? '') as String,
+      nameEn: (map['name_en'] ?? fallbackEn) as String,
       testament: (map['testament'] ?? 'OT') as String,
     );
   }
@@ -52,7 +81,6 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'tamil_bible.db');
 
-    // Copy from asset if database does not exist or needs refresh
     final exists = await databaseExists(path);
     if (!exists) {
       try {
