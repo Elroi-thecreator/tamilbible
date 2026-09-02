@@ -546,6 +546,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   late int _currentChapter;
   double _fontSize = 18.0;
   bool _audioBarVisible = false;
+  bool _showEnglish = false;
 
   @override
   void initState() {
@@ -553,6 +554,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _currentChapter = widget.initialChapter;
     _pageController = PageController(initialPage: widget.initialChapter - 1);
     _saveLastRead(_currentChapter);
+    _loadEnglishSetting();
+  }
+
+  Future<void> _loadEnglishSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _showEnglish = prefs.getBool('show_parallel_english') ?? false;
+    });
+  }
+
+  Future<void> _toggleEnglish() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = !_showEnglish;
+    await prefs.setBool('show_parallel_english', val);
+    setState(() => _showEnglish = val);
   }
 
   Future<void> _saveLastRead(int ch) async {
@@ -650,6 +666,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
         actions: [
+          // Parallel Bilingual View Toggle (Tamil / KJV)
+          TextButton(
+            onPressed: _toggleEnglish,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _showEnglish ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Theme.of(context).colorScheme.primary),
+              ),
+              child: Text(
+                'KJV',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: _showEnglish ? Colors.white : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
           IconButton(
             icon: Icon(_audioBarVisible ? Icons.volume_up : Icons.volume_up_outlined),
             tooltip: 'குரல் வாசிப்பு (TTS Audio)',
@@ -733,7 +769,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
               },
               itemBuilder: (context, pageIndex) {
                 final chapter = pageIndex + 1;
-                return ChapterView(book: widget.book, chapter: chapter, fontSize: _fontSize);
+                return ChapterView(
+                  book: widget.book,
+                  chapter: chapter,
+                  fontSize: _fontSize,
+                  showEnglish: _showEnglish,
+                );
               },
             ),
           ),
@@ -747,8 +788,15 @@ class ChapterView extends StatefulWidget {
   final BookModel book;
   final int chapter;
   final double fontSize;
+  final bool showEnglish;
 
-  const ChapterView({super.key, required this.book, required this.chapter, required this.fontSize});
+  const ChapterView({
+    super.key,
+    required this.book,
+    required this.chapter,
+    required this.fontSize,
+    required this.showEnglish,
+  });
 
   @override
   State<ChapterView> createState() => _ChapterViewState();
@@ -841,7 +889,9 @@ class _ChapterViewState extends State<ChapterView> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
         final reference = '${widget.book.name} ${widget.chapter}:${verse.number}';
-        final fullText = '$reference\n"${verse.text}"';
+        final fullText = (verse.textEn != null && verse.textEn!.isNotEmpty)
+            ? '$reference\n"${verse.text}"\n[KJV] "${verse.textEn}"'
+            : '$reference\n"${verse.text}"';
 
         return SafeArea(
           child: Padding(
@@ -851,15 +901,17 @@ class _ChapterViewState extends State<ChapterView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(reference, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(verse.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey)),
-                const Divider(height: 24),
+                if (verse.textEn != null && verse.textEn!.isNotEmpty)
+                  Text('[KJV] ${verse.textEn!}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
+                const Divider(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     IconButton(
                       icon: const Icon(Icons.volume_up),
-                      tooltip: 'வாசி',
+                      tooltip: 'வாசி (Tamil)',
                       onPressed: () {
                         TtsEngine.instance.startChapter([verse.text]);
                         Navigator.pop(ctx);
@@ -892,9 +944,9 @@ class _ChapterViewState extends State<ChapterView> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                const Text('ஹைலைட் வண்ணம்:', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 10),
+                const Text('ஹைலைட் வண்ணம்:', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -967,31 +1019,54 @@ class _ChapterViewState extends State<ChapterView> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.symmetric(vertical: 2.0),
-                    padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 5.0),
                     decoration: BoxDecoration(
                       color: hlColor,
                       borderRadius: BorderRadius.circular(6),
                       border: isTtsActive ? Border.all(color: Theme.of(context).colorScheme.primary) : null,
                     ),
-                    child: RichText(
-                      text: TextSpan(
-                        style: TextStyle(
-                          fontSize: widget.fontSize,
-                          height: 1.65,
-                          color: Theme.of(context).textTheme.bodyLarge?.color,
-                        ),
-                        children: [
-                          TextSpan(
-                            text: '${v.number} ',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Tamil Verse
+                        RichText(
+                          text: TextSpan(
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: widget.fontSize * 0.85,
+                              fontSize: widget.fontSize,
+                              height: 1.65,
+                              color: Theme.of(context).textTheme.bodyLarge?.color,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: '${v.number} ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: widget.fontSize * 0.85,
+                                ),
+                              ),
+                              TextSpan(text: v.text),
+                            ],
+                          ),
+                        ),
+
+                        // Parallel English KJV
+                        if (widget.showEnglish && v.textEn != null && v.textEn!.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 18.0),
+                            child: Text(
+                              v.textEn!,
+                              style: TextStyle(
+                                fontSize: widget.fontSize * 0.86,
+                                height: 1.45,
+                                color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.85),
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                           ),
-                          TextSpan(text: v.text),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 );
@@ -1004,6 +1079,7 @@ class _ChapterViewState extends State<ChapterView> {
   }
 }
 
+// ----------------- TOPICAL GUIDE SCREEN -----------------
 class TopicalGuideScreen extends StatelessWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1055,6 +1131,7 @@ class TopicalGuideScreen extends StatelessWidget {
   }
 }
 
+// ----------------- NOTES LIST SCREEN -----------------
 class NotesListScreen extends StatefulWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1153,6 +1230,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
   }
 }
 
+// ----------------- HIGHLIGHTS SCREEN -----------------
 class HighlightsScreen extends StatefulWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1246,6 +1324,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
   }
 }
 
+// ----------------- PLANS LIST SCREEN -----------------
 class PlansListScreen extends StatelessWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1458,6 +1537,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   }
 }
 
+// ----------------- SEARCH SCREEN -----------------
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
