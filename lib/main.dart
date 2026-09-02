@@ -59,9 +59,20 @@ class AppSettings extends ChangeNotifier {
       case BibleLanguageMode.tamil:
         return 'தமிழ்';
       case BibleLanguageMode.english:
-        return 'KJV';
+        return 'ENG';
       case BibleLanguageMode.combined:
         return 'இணை';
+    }
+  }
+
+  String get languageFullTitle {
+    switch (languageMode) {
+      case BibleLanguageMode.tamil:
+        return 'தமிழ் மட்டும்';
+      case BibleLanguageMode.english:
+        return 'English (KJV)';
+      case BibleLanguageMode.combined:
+        return 'தமிழ் + English';
     }
   }
 
@@ -336,6 +347,59 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  void _showLanguageSelectorSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                child: Text('மொழி தேர்வு (Language Mode)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ),
+              const Divider(),
+              RadioListTile<BibleLanguageMode>(
+                title: const Text('தமிழ் மட்டும் (Tamil Only)'),
+                subtitle: const Text('திருவிவிலியம் பழைய மற்றும் புதிய ஏற்பாடு'),
+                value: BibleLanguageMode.tamil,
+                groupValue: AppSettings.instance.languageMode,
+                onChanged: (val) {
+                  if (val != null) AppSettings.instance.setLanguageMode(val);
+                  Navigator.pop(ctx);
+                },
+              ),
+              RadioListTile<BibleLanguageMode>(
+                title: const Text('English Only (KJV)'),
+                subtitle: const Text('Authorized King James Version'),
+                value: BibleLanguageMode.english,
+                groupValue: AppSettings.instance.languageMode,
+                onChanged: (val) {
+                  if (val != null) AppSettings.instance.setLanguageMode(val);
+                  Navigator.pop(ctx);
+                },
+              ),
+              RadioListTile<BibleLanguageMode>(
+                title: const Text('தமிழ் + KJV English (இணைந்தது)'),
+                subtitle: const Text('ஒப்புநோக்கு வாசிப்பு (Bilingual Parallel)'),
+                value: BibleLanguageMode.combined,
+                groupValue: AppSettings.instance.languageMode,
+                onChanged: (val) {
+                  if (val != null) AppSettings.instance.setLanguageMode(val);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -369,49 +433,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
         return Scaffold(
           appBar: AppBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    image: DecorationImage(
-                      image: AssetImage('assets/logo.png'),
-                      fit: BoxFit.contain,
-                    ),
-                  ),
+            title: Container(
+              width: 38,
+              height: 38,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(
+                  image: AssetImage('assets/logo.png'),
+                  fit: BoxFit.contain,
                 ),
-                const SizedBox(width: 8),
-                SegmentedButton<BibleLanguageMode>(
-                  showSelectedIcon: false,
-                  style: SegmentedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 0),
-                  ),
-                  segments: const [
-                    ButtonSegment(
-                      value: BibleLanguageMode.tamil,
-                      label: Text('தமிழ்', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                    ButtonSegment(
-                      value: BibleLanguageMode.english,
-                      label: Text('ENG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                    ButtonSegment(
-                      value: BibleLanguageMode.combined,
-                      label: Text('இணைந்தது', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                  selected: {langMode},
-                  onSelectionChanged: (newSelection) {
-                    AppSettings.instance.setLanguageMode(newSelection.first);
-                  },
-                ),
-              ],
+              ),
             ),
+            centerTitle: false,
             actions: [
               IconButton(
                 icon: const Icon(Icons.lightbulb_outline),
@@ -463,6 +496,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ],
             ),
           ),
+          floatingActionButton: FloatingActionButton.extended(
+            heroTag: 'home_lang_fab',
+            elevation: 3,
+            icon: const Icon(Icons.translate, size: 18),
+            label: Text(
+              AppSettings.instance.languageBadgeLabel,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            tooltip: 'மொழி மாற்று (${AppSettings.instance.languageFullTitle})',
+            onPressed: _showLanguageSelectorSheet,
+          ),
+          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           body: Column(
             children: [
               Container(
@@ -615,6 +660,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final suffix = langMode == BibleLanguageMode.english ? 'Ch.' : 'அதி.';
 
     return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 76),
       itemCount: books.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
