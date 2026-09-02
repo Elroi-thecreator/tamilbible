@@ -8,13 +8,15 @@ import 'reading_plans.dart';
 import 'topical_data.dart';
 import 'tts_helper.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppSettings.instance.loadPreferences();
   runApp(const TamilBibleApp());
 }
 
 enum AppThemeMode { light, sepia, dark }
 enum TamilFontOption { muktaMalar, catamaran, notoSerifTamil }
+enum BibleLanguageMode { tamil, english, combined }
 
 class AppSettings extends ChangeNotifier {
   static final AppSettings instance = AppSettings._();
@@ -22,6 +24,13 @@ class AppSettings extends ChangeNotifier {
 
   AppThemeMode themeMode = AppThemeMode.light;
   TamilFontOption fontOption = TamilFontOption.muktaMalar;
+  BibleLanguageMode languageMode = BibleLanguageMode.combined;
+
+  Future<void> loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final langIndex = prefs.getInt('bible_language_mode') ?? BibleLanguageMode.combined.index;
+    languageMode = BibleLanguageMode.values[langIndex];
+  }
 
   void setTheme(AppThemeMode mode) {
     themeMode = mode;
@@ -31,6 +40,13 @@ class AppSettings extends ChangeNotifier {
   void setFont(TamilFontOption option) {
     fontOption = option;
     notifyListeners();
+  }
+
+  Future<void> setLanguageMode(BibleLanguageMode mode) async {
+    languageMode = mode;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('bible_language_mode', mode.index);
   }
 
   TextTheme getTextTheme(Brightness brightness) {
@@ -305,18 +321,56 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     return Scaffold(
       appBar: AppBar(
-        title: Container(
-          width: 38,
-          height: 38,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            image: DecorationImage(
-              image: AssetImage('assets/logo.png'),
-              fit: BoxFit.contain,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(
+                  image: AssetImage('assets/logo.png'),
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            // Landing-page Language Selector Segmented Buttons
+            AnimatedBuilder(
+              animation: AppSettings.instance,
+              builder: (context, _) {
+                final currentMode = AppSettings.instance.languageMode;
+                return SegmentedButton<BibleLanguageMode>(
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                      value: BibleLanguageMode.tamil,
+                      label: Text('தமிழ்', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                    ButtonSegment(
+                      value: BibleLanguageMode.english,
+                      label: Text('ENG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                    ButtonSegment(
+                      value: BibleLanguageMode.combined,
+                      label: Text('இணைந்தது', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                  selected: {currentMode},
+                  onSelectionChanged: (newSelection) {
+                    AppSettings.instance.setLanguageMode(newSelection.first);
+                  },
+                );
+              },
+            ),
+          ],
         ),
-        centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.lightbulb_outline),
@@ -546,7 +600,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   late int _currentChapter;
   double _fontSize = 18.0;
   bool _audioBarVisible = false;
-  bool _showEnglish = false;
 
   @override
   void initState() {
@@ -554,21 +607,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _currentChapter = widget.initialChapter;
     _pageController = PageController(initialPage: widget.initialChapter - 1);
     _saveLastRead(_currentChapter);
-    _loadEnglishSetting();
-  }
-
-  Future<void> _loadEnglishSetting() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _showEnglish = prefs.getBool('show_parallel_english') ?? false;
-    });
-  }
-
-  Future<void> _toggleEnglish() async {
-    final prefs = await SharedPreferences.getInstance();
-    final val = !_showEnglish;
-    await prefs.setBool('show_parallel_english', val);
-    setState(() => _showEnglish = val);
   }
 
   Future<void> _saveLastRead(int ch) async {
@@ -642,7 +680,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Future<void> _startReadingFullChapter() async {
     final verses = await DatabaseHelper.getVerses(widget.book.id, _currentChapter);
-    final texts = verses.map((v) => v.text.trim()).toList();
+    final isEnglishOnly = AppSettings.instance.languageMode == BibleLanguageMode.english;
+    final texts = verses
+        .map((v) => (isEnglishOnly && v.textEn != null && v.textEn!.isNotEmpty) ? v.textEn!.trim() : v.text.trim())
+        .toList();
     await TtsEngine.instance.startChapter(texts);
   }
 
@@ -666,26 +707,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
         actions: [
-          // Parallel Bilingual View Toggle (Tamil / KJV)
-          TextButton(
-            onPressed: _toggleEnglish,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _showEnglish ? Theme.of(context).colorScheme.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Theme.of(context).colorScheme.primary),
-              ),
-              child: Text(
-                'KJV',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: _showEnglish ? Colors.white : Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-          ),
           IconButton(
             icon: Icon(_audioBarVisible ? Icons.volume_up : Icons.volume_up_outlined),
             tooltip: 'குரல் வாசிப்பு (TTS Audio)',
@@ -773,7 +794,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   book: widget.book,
                   chapter: chapter,
                   fontSize: _fontSize,
-                  showEnglish: _showEnglish,
                 );
               },
             ),
@@ -788,14 +808,12 @@ class ChapterView extends StatefulWidget {
   final BookModel book;
   final int chapter;
   final double fontSize;
-  final bool showEnglish;
 
   const ChapterView({
     super.key,
     required this.book,
     required this.chapter,
     required this.fontSize,
-    required this.showEnglish,
   });
 
   @override
@@ -884,14 +902,20 @@ class _ChapterViewState extends State<ChapterView> {
   }
 
   void _showVerseActions(VerseModel verse) {
+    final langMode = AppSettings.instance.languageMode;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
         final reference = '${widget.book.name} ${widget.chapter}:${verse.number}';
-        final fullText = (verse.textEn != null && verse.textEn!.isNotEmpty)
-            ? '$reference\n"${verse.text}"\n[KJV] "${verse.textEn}"'
-            : '$reference\n"${verse.text}"';
+        String fullText = '';
+        if (langMode == BibleLanguageMode.tamil) {
+          fullText = '$reference\n"${verse.text}"';
+        } else if (langMode == BibleLanguageMode.english) {
+          fullText = '$reference\n"${verse.textEn ?? ''}"';
+        } else {
+          fullText = '$reference\n"${verse.text}"\n[KJV] "${verse.textEn ?? ''}"';
+        }
 
         return SafeArea(
           child: Padding(
@@ -902,8 +926,9 @@ class _ChapterViewState extends State<ChapterView> {
               children: [
                 Text(reference, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                Text(verse.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey)),
-                if (verse.textEn != null && verse.textEn!.isNotEmpty)
+                if (langMode != BibleLanguageMode.english)
+                  Text(verse.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey)),
+                if (langMode != BibleLanguageMode.tamil && verse.textEn != null && verse.textEn!.isNotEmpty)
                   Text('[KJV] ${verse.textEn!}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
                 const Divider(height: 20),
                 Row(
@@ -911,9 +936,12 @@ class _ChapterViewState extends State<ChapterView> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.volume_up),
-                      tooltip: 'வாசி (Tamil)',
+                      tooltip: 'வாசி',
                       onPressed: () {
-                        TtsEngine.instance.startChapter([verse.text]);
+                        final speakText = (langMode == BibleLanguageMode.english && verse.textEn != null && verse.textEn!.isNotEmpty)
+                            ? verse.textEn!
+                            : verse.text;
+                        TtsEngine.instance.startChapter([speakText]);
                         Navigator.pop(ctx);
                       },
                     ),
@@ -996,12 +1024,13 @@ class _ChapterViewState extends State<ChapterView> {
         final verses = snapshot.data!;
 
         return AnimatedBuilder(
-          animation: TtsEngine.instance,
+          animation: Listenable.merge([TtsEngine.instance, AppSettings.instance]),
           builder: (context, _) {
             final activeTtsIndex = (TtsEngine.instance.state == TtsState.playing ||
                     TtsEngine.instance.state == TtsState.paused)
                 ? TtsEngine.instance.currentIndex
                 : null;
+            final langMode = AppSettings.instance.languageMode;
 
             return ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1028,40 +1057,56 @@ class _ChapterViewState extends State<ChapterView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Tamil Verse
-                        RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontSize: widget.fontSize,
-                              height: 1.65,
-                              color: Theme.of(context).textTheme.bodyLarge?.color,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: '${v.number} ',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontSize: widget.fontSize * 0.85,
-                                ),
-                              ),
-                              TextSpan(text: v.text),
-                            ],
-                          ),
-                        ),
-
-                        // Parallel English KJV
-                        if (widget.showEnglish && v.textEn != null && v.textEn!.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 18.0),
-                            child: Text(
-                              v.textEn!,
+                        // Tamil Verse (Shown for Tamil and Combined modes)
+                        if (langMode != BibleLanguageMode.english)
+                          RichText(
+                            text: TextSpan(
                               style: TextStyle(
-                                fontSize: widget.fontSize * 0.86,
-                                height: 1.45,
-                                color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.85),
-                                fontStyle: FontStyle.italic,
+                                fontSize: widget.fontSize,
+                                height: 1.65,
+                                color: Theme.of(context).textTheme.bodyLarge?.color,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: '${v.number} ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontSize: widget.fontSize * 0.85,
+                                  ),
+                                ),
+                                TextSpan(text: v.text),
+                              ],
+                            ),
+                          ),
+
+                        // English KJV Verse (Shown for English and Combined modes)
+                        if (langMode != BibleLanguageMode.tamil && v.textEn != null && v.textEn!.isNotEmpty) ...[
+                          if (langMode == BibleLanguageMode.combined) const SizedBox(height: 3),
+                          Padding(
+                            padding: EdgeInsets.only(left: langMode == BibleLanguageMode.combined ? 18.0 : 0.0),
+                            child: RichText(
+                              text: TextSpan(
+                                style: TextStyle(
+                                  fontSize: langMode == BibleLanguageMode.english ? widget.fontSize : widget.fontSize * 0.86,
+                                  height: 1.45,
+                                  color: langMode == BibleLanguageMode.english
+                                      ? Theme.of(context).textTheme.bodyLarge?.color
+                                      : Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.85),
+                                  fontStyle: langMode == BibleLanguageMode.combined ? FontStyle.italic : FontStyle.normal,
+                                ),
+                                children: [
+                                  if (langMode == BibleLanguageMode.english)
+                                    TextSpan(
+                                      text: '${v.number} ',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).colorScheme.primary,
+                                        fontSize: widget.fontSize * 0.85,
+                                      ),
+                                    ),
+                                  TextSpan(text: v.textEn!),
+                                ],
                               ),
                             ),
                           ),
@@ -1079,7 +1124,6 @@ class _ChapterViewState extends State<ChapterView> {
   }
 }
 
-// ----------------- TOPICAL GUIDE SCREEN -----------------
 class TopicalGuideScreen extends StatelessWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1131,7 +1175,6 @@ class TopicalGuideScreen extends StatelessWidget {
   }
 }
 
-// ----------------- NOTES LIST SCREEN -----------------
 class NotesListScreen extends StatefulWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1230,7 +1273,6 @@ class _NotesListScreenState extends State<NotesListScreen> {
   }
 }
 
-// ----------------- HIGHLIGHTS SCREEN -----------------
 class HighlightsScreen extends StatefulWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1324,7 +1366,6 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
   }
 }
 
-// ----------------- PLANS LIST SCREEN -----------------
 class PlansListScreen extends StatelessWidget {
   final List<BookModel> allBooks;
   final Map<int, int> chapterCounts;
@@ -1537,7 +1578,6 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   }
 }
 
-// ----------------- SEARCH SCREEN -----------------
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
