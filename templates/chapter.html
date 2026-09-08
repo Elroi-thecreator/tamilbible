@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}{{ book.name_en }} {{ chapter }} | {{ book.name_ta }} {{ chapter }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <!-- Chapter Toolbar -->
+    <div class="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-lg shadow-sm border mb-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ book.name_en }} {{ chapter }}</h1>
+            <h2 class="tamil-text text-lg text-blue-700 font-semibold">{{ book.name_ta }} {{ chapter }}</h2>
+        </div>
+
+        <!-- View Controls -->
+        <div class="flex items-center space-x-2">
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Layout:</span>
+            <button id="btn-view-split" onclick="toggleViewMode('split')" 
+                    class="px-3 py-1 text-xs font-medium rounded border border-gray-300">
+                Parallel (Side-by-Side)
+            </button>
+            <button id="btn-view-interlinear" onclick="toggleViewMode('interlinear')" 
+                    class="px-3 py-1 text-xs font-medium rounded border border-gray-300">
+                Interlinear (Stacked)
+            </button>
+        </div>
+    </div>
+
+    <!-- Chapter Navigation Bar -->
+    <div class="flex justify-between items-center mb-6">
+        {% if prev_chapter %}
+        <a href="/book/{{ book.id }}/chapter/{{ prev_chapter }}" class="px-4 py-2 bg-white border rounded shadow-sm hover:bg-gray-50 text-sm font-medium">
+            ← Chapter {{ prev_chapter }}
+        </a>
+        {% else %}<div></div>{% endif %}
+
+        <!-- Chapter Jump Select -->
+        <select onchange="location = this.value;" class="bg-white border rounded px-3 py-2 text-sm shadow-sm">
+            {% for c in range(1, book.total_chapters + 1) %}
+            <option value="/book/{{ book.id }}/chapter/{{ c }}" {% if c == chapter %}selected{% endif %}>
+                Chapter {{ c }}
+            </option>
+            {% endfor %}
+        </select>
+
+        {% if next_chapter %}
+        <a href="/book/{{ book.id }}/chapter/{{ next_chapter }}" class="px-4 py-2 bg-white border rounded shadow-sm hover:bg-gray-50 text-sm font-medium">
+            Chapter {{ next_chapter }} →
+        </a>
+        {% else %}<div></div>{% endif %}
+    </div>
+
+    <!-- Verses Container -->
+    <div id="verses-container" class="grid gap-3">
+        {% for v in verses %}
+        <div class="verse-card bg-white p-4 rounded-lg shadow-sm border border-gray-200 transition hover:border-blue-300">
+            <div class="flex justify-between items-center text-xs text-gray-400 mb-2">
+                <span class="font-bold text-gray-700">{{ chapter }}:{{ v.verse }}</span>
+                <div class="flex items-center space-x-3">
+                    <button class="bookmark-btn text-base leading-none" 
+                            data-book="{{ book.id }}" data-chapter="{{ chapter }}" data-verse="{{ v.verse }}"
+                            onclick="toggleBookmark({{ book.id }}, '{{ book.name_en }}', '{{ book.name_ta }}', {{ chapter }}, {{ v.verse }}, '{{ v.text_en | escape }}', '{{ v.text_ta | escape }}')">
+                        ☆
+                    </button>
+                    <button onclick="copyBilingualVerse('{{ book.name_en }} {{ chapter }}:{{ v.verse }}', '{{ book.name_ta }} {{ chapter }}:{{ v.verse }}', '{{ v.text_en | escape }}', '{{ v.text_ta | escape }}')" 
+                            class="hover:text-gray-700" title="Copy Bilingual Verse">
+                        📋
+                    </button>
+                </div>
+            </div>
+
+            <!-- Verse Body -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="text-gray-800 leading-relaxed text-base">
+                    {{ v.text_en }}
+                </div>
+                <div class="tamil-text text-gray-900 leading-loose text-base border-t md:border-t-0 md:border-l border-gray-100 pt-2 md:pt-0 md:pl-4">
+                    {{ v.text_ta }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

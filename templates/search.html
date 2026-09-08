@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Search results for "{{ query }}"{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-xl font-bold mb-4">Results for: <span class="text-blue-700">"{{ query }}"</span></h1>
+
+    {% if results %}
+        <div class="space-y-4">
+            {% for r in results %}
+            <div class="bg-white p-4 rounded-lg shadow-sm border space-y-2">
+                <a href="/book/{{ r.book_id }}/chapter/{{ r.chapter }}" class="text-sm font-semibold text-blue-700 hover:underline block">
+                    {{ r.book_name_en }} {{ r.chapter }}:{{ r.verse }} — {{ r.book_name_ta }} {{ r.chapter }}:{{ r.verse }}
+                </a>
+                <p class="text-sm text-gray-700">{{ r.text_en }}</p>
+                <p class="tamil-text text-sm text-gray-900">{{ r.text_ta }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="bg-white p-8 text-center text-gray-500 rounded border">
+            No verses found matching your query.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

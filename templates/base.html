@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ta" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}வேதம் | Holy Bible{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Serif+Tamil:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        serif: ['Lora', 'serif'],
+                        cinzel: ['Cinzel', 'serif'],
+                        tamil: ['"Noto Serif Tamil"', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .font-tamil { font-family: 'Noto Serif Tamil', serif; line-height: 2.1; }
+        .font-english { font-family: 'Lora', serif; line-height: 1.85; }
+        body.theme-sepia { background-color: #FAF6EE; color: #2D241E; }
+        body.theme-sepia .bg-card { background-color: #F3EBDD; border-color: #E2D3BF; }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100 transition-colors duration-200 min-h-screen flex flex-col font-serif">
+
+    <!-- Navbar -->
+    <header id="site-header" class="sticky top-0 z-40 bg-white/90 dark:bg-stone-900/95 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+            
+            <a href="/" class="flex items-center space-x-2.5">
+                <span class="w-8 h-8 rounded-full bg-amber-700 text-white flex items-center justify-center font-cinzel font-bold text-sm shadow-sm">†</span>
+                <div>
+                    <span class="font-cinzel tracking-wider text-base font-bold block leading-none">THE BIBLE</span>
+                    <span class="font-tamil text-xs text-amber-800 dark:text-amber-400 leading-none">பரிசுத்த வேதாகமம்</span>
+                </div>
+            </a>
+
+            <!-- Search Bar -->
+            <form action="/search" method="get" class="hidden md:flex flex-1 max-w-sm mx-4">
+                <div class="relative w-full">
+                    <input type="text" name="q" placeholder="Search verses / வசனங்களைத் தேடுக..."
+                           class="w-full text-xs bg-stone-100 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-full pl-9 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-700">
+                    <span class="absolute left-3 top-2.5 text-stone-400 text-xs">🔍</span>
+                </div>
+            </form>
+
+            <!-- Navigation & Theme Settings -->
+            <div class="flex items-center space-x-2 text-xs">
+                <a href="/bookmarks" class="px-3 py-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 flex items-center gap-1 font-medium">
+                    <span>★</span> <span class="hidden sm:inline">Bookmarks</span>
+                </a>
+
+                <!-- Theme Pickers -->
+                <div class="flex items-center border border-stone-300 dark:border-stone-700 rounded-full p-1 bg-stone-100 dark:bg-stone-800">
+                    <button onclick="setTheme('light')" class="px-2 py-0.5 rounded-full text-xs hover:bg-white dark:hover:bg-stone-700" title="Light Mode">☀️</button>
+                    <button onclick="setTheme('sepia')" class="px-2 py-0.5 rounded-full text-xs hover:bg-amber-100 dark:hover:bg-amber-900" title="Sepia Warmth">📜</button>
+                    <button onclick="setTheme('dark')" class="px-2 py-0.5 rounded-full text-xs hover:bg-stone-600" title="Night Mode">🌙</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-stone-200 dark:border-stone-800 py-8 bg-stone-100 dark:bg-stone-950 text-center text-xs text-stone-500">
+        <p class="font-cinzel tracking-widest text-stone-700 dark:text-stone-400">SOLI DEO GLORIA</p>
+        <p class="mt-1 font-tamil">பரிசுத்த வேதாகமம் • Bilingual Tamil & English Scripture</p>
+    </footer>
+
+    <script src="/static/js/storage.js"></script>
+    <script>
+        function setTheme(theme) {
+            document.documentElement.classList.remove('dark');
+            document.body.classList.remove('theme-sepia');
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else if (theme === 'sepia') {
+                document.body.classList.add('theme-sepia');
+            }
+            localStorage.setItem('bible_app_theme', theme);
+        }
+        (function() {
+            const saved = localStorage.getItem('bible_app_theme') || 'light';
+            setTheme(saved);
+        })();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
