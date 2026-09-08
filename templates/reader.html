@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}{{ book.name_en }} {{ chapter }} | {{ book.name_ta }} {{ chapter }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-6 pb-32">
+
+    <!-- Top Sticky Toolbar -->
+    <div id="reader-toolbar" class="sticky top-16 z-30 mb-6 bg-white/95 dark:bg-stone-900/95 backdrop-blur border border-stone-200 dark:border-stone-800 rounded-xl p-3 sm:px-6 shadow-sm flex flex-wrap items-center justify-between gap-3 transition-all duration-300">
+        
+        <!-- Book & Chapter Selectors -->
+        <div class="flex items-center space-x-2">
+            <button onclick="document.getElementById('quick-nav-modal').classList.remove('hidden')" 
+                    class="font-cinzel font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 hover:text-amber-700 flex items-center gap-1">
+                <span>{{ book.name_en }}</span>
+                <span class="text-xs">▾</span>
+            </button>
+            <span class="text-stone-400 font-tamil text-xs sm:text-sm">({{ book.name_ta }})</span>
+
+            <!-- Direct Chapter Dropdown -->
+            <select onchange="window.location.href='/read/{{ book.id }}/' + this.value + '?mode={{ mode }}'" 
+                    class="bg-stone-100 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold rounded-lg px-2.5 py-1 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-700 cursor-pointer">
+                {% for c in range(1, book.total_chapters + 1) %}
+                <option value="{{ c }}" {% if c == chapter %}selected{% endif %}>Ch {{ c }}</option>
+                {% endfor %}
+            </select>
+
+            <!-- Chapter Grid Modal Trigger -->
+            <button onclick="document.getElementById('chapter-grid-tray').classList.toggle('hidden')"
+                    class="text-xs border border-stone-300 dark:border-stone-700 rounded-lg px-2 py-1 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 font-semibold">
+                Chapters
+            </button>
+        </div>
+
+        <!-- Continuous Audio Button -->
+        <button onclick="window.bibleAudio.play(0)" 
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-semibold shadow-sm transition">
+            <span>▶</span> <span>Listen Chapter</span>
+        </button>
+
+        <!-- View Modes (Parallel / Tamil / English) -->
+        <div class="flex items-center bg-stone-100 dark:bg-stone-800 p-1 rounded-lg text-xs font-medium">
+            <a href="/read/{{ book.id }}/{{ chapter }}?mode=bilingual" 
+               class="px-2.5 py-1 rounded-md transition {% if mode == 'bilingual' %}bg-white dark:bg-stone-700 shadow-sm text-amber-800 dark:text-amber-400 font-bold{% else %}text-stone-600 dark:text-stone-400{% endif %}">
+               Parallel
+            </a>
+            <a href="/read/{{ book.id }}/{{ chapter }}?mode=ta" 
+               class="px-2.5 py-1 rounded-md transition font-tamil {% if mode == 'ta' %}bg-white dark:bg-stone-700 shadow-sm text-amber-800 dark:text-amber-400 font-bold{% else %}text-stone-600 dark:text-stone-400{% endif %}">
+               தமிழ்
+            </a>
+            <a href="/read/{{ book.id }}/{{ chapter }}?mode=en" 
+               class="px-2.5 py-1 rounded-md transition {% if mode == 'en' %}bg-white dark:bg-stone-700 shadow-sm text-amber-800 dark:text-amber-400 font-bold{% else %}text-stone-600 dark:text-stone-400{% endif %}">
+               English
+            </a>
+        </div>
+
+        <!-- Controls: Font Size, Zen Mode, Navigation -->
+        <div class="flex items-center space-x-1 sm:space-x-2">
+            <button onclick="toggleZenMode()" title="Zen Reading Mode" class="px-2 py-1 border border-stone-200 dark:border-stone-700 rounded-md text-xs hover:bg-stone-100 dark:hover:bg-stone-800">
+                🧘 Focus
+            </button>
+            <div class="flex items-center border border-stone-200 dark:border-stone-700 rounded-md px-2 py-1 text-xs">
+                <button onclick="changeFontSize(-1)" class="px-1 hover:font-bold text-stone-500">A-</button>
+                <span class="text-stone-300 mx-1">|</span>
+                <button onclick="changeFontSize(1)" class="px-1 hover:font-bold text-stone-500">A+</button>
+            </div>
+
+            {% if prev_ch %}
+            <a href="/read/{{ book.id }}/{{ prev_ch }}?mode={{ mode }}" class="p-1 sm:px-2.5 py-1 border border-stone-200 dark:border-stone-700 rounded-md hover:bg-stone-100 dark:hover:bg-stone-800 text-xs">‹</a>
+            {% endif %}
+            {% if next_ch %}
+            <a href="/read/{{ book.id }}/{{ next_ch }}?mode={{ mode }}" class="p-1 sm:px-2.5 py-1 border border-stone-200 dark:border-stone-700 rounded-md hover:bg-stone-100 dark:hover:bg-stone-800 text-xs">›</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Collapsible Chapter Grid Drawer -->
+    <div id="chapter-grid-tray" class="hidden mb-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-3 pb-2 border-b border-stone-100 dark:border-stone-800">
+            <span class="text-xs font-cinzel font-bold text-stone-500 uppercase tracking-wider">All Chapters</span>
+            <button onclick="document.getElementById('chapter-grid-tray').classList.add('hidden')" class="text-xs text-stone-400 hover:text-stone-600">✕ Close</button>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+            {% for c in range(1, book.total_chapters + 1) %}
+            <a href="/read/{{ book.id }}/{{ c }}?mode={{ mode }}" 
+               class="w-9 h-9 flex items-center justify-center rounded-lg text-xs font-semibold border transition {% if c == chapter %}bg-amber-700 text-white border-amber-700 shadow-sm{% else %}bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-amber-600{% endif %}">
+                {{ c }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Verses Container -->
+    <div id="reader-content" class="space-y-4">
+        {% for v in verses %}
+        <div id="v{{ v.verse }}" class="verse-item group p-4 sm:p-5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl transition duration-150 shadow-sm">
+            
+            <div class="flex items-center justify-between text-xs text-stone-400 mb-3 pb-2 border-b border-stone-100 dark:border-stone-800">
+                <span class="font-cinzel font-bold text-amber-800 dark:text-amber-500 text-sm">{{ chapter }}:{{ v.verse }}</span>
+                
+                <div class="flex items-center space-x-2 sm:space-x-3 opacity-90 group-hover:opacity-100">
+                    <!-- Color Highlighter Palette -->
+                    <div class="flex items-center space-x-1">
+                        <button onclick="setVerseHighlight({{ book.id }}, {{ chapter }}, {{ v.verse }}, 'yellow')" class="w-3.5 h-3.5 rounded-full bg-amber-300 border border-amber-400 hover:scale-110 transition" title="Highlight Yellow"></button>
+                        <button onclick="setVerseHighlight({{ book.id }}, {{ chapter }}, {{ v.verse }}, 'green')" class="w-3.5 h-3.5 rounded-full bg-emerald-300 border border-emerald-400 hover:scale-110 transition" title="Highlight Green"></button>
+                        <button onclick="setVerseHighlight({{ book.id }}, {{ chapter }}, {{ v.verse }}, 'rose')" class="w-3.5 h-3.5 rounded-full bg-rose-300 border border-rose-400 hover:scale-110 transition" title="Highlight Rose"></button>
+                    </div>
+
+                    <button class="bookmark-btn hover:text-amber-500 text-sm leading-none"
+                            data-book="{{ book.id }}" data-chapter="{{ chapter }}" data-verse="{{ v.verse }}"
+                            onclick="toggleBookmark({{ book.id }}, '{{ book.name_en }}', '{{ book.name_ta }}', {{ chapter }}, {{ v.verse }}, '{{ v.text_en | escape }}', '{{ v.text_ta | escape }}')">
+                        ☆
+                    </button>
+                    <button onclick="window.bibleAudio.play({{ loop.index0 }})" title="Play continuously from this verse" class="hover:text-amber-600 flex items-center gap-0.5 text-xs">
+                        <span>▶</span>
+                    </button>
+                    <button onclick="copyBilingualVerse('{{ book.name_en }} {{ chapter }}:{{ v.verse }}', '{{ book.name_ta }} {{ chapter }}:{{ v.verse }}', '{{ v.text_en | escape }}', '{{ v.text_ta | escape }}')" 
+                            class="hover:text-stone-700 dark:hover:text-stone-200 text-xs" title="Copy Bilingual">📋</button>
+                </div>
+            </div>
+
+            <!-- Verse Body Layout -->
+            {% if mode == 'bilingual' %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <p class="verse-text-en font-english text-stone-800 dark:text-stone-200 text-base leading-relaxed">{{ v.text_en }}</p>
+                <p class="verse-text-ta font-tamil text-stone-900 dark:text-stone-100 text-base md:border-l md:border-stone-100 md:dark:border-stone-800 md:pl-6 pt-2 md:pt-0">{{ v.text_ta }}</p>
+            </div>
+            {% elif mode == 'ta' %}
+            <p class="verse-text-ta font-tamil text-stone-900 dark:text-stone-100 text-lg">{{ v.text_ta }}</p>
+            {% elif mode == 'en' %}
+            <p class="verse-text-en font-english text-stone-800 dark:text-stone-200 text-lg">{{ v.text_en }}</p>
+            {% endif %}
+
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Bottom Page Navigation -->
+    <div class="flex justify-between items-center py-10">
+        {% if prev_ch %}
+        <a href="/read/{{ book.id }}/{{ prev_ch }}?mode={{ mode }}" class="px-5 py-2.5 bg-white dark:bg-stone-800 border rounded-lg shadow-sm hover:border-amber-700 text-sm font-medium">← Previous Chapter</a>
+        {% else %}<div></div>{% endif %}
+        {% if next_ch %}
+        <a href="/read/{{ book.id }}/{{ next_ch }}?mode={{ mode }}" class="px-5 py-2.5 bg-white dark:bg-stone-800 border rounded-lg shadow-sm hover:border-amber-700 text-sm font-medium">Next Chapter →</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Persistent Floating Continuous Audio Dock -->
+<div id="audio-dock" class="fixed bottom-0 inset-x-0 bg-stone-950/95 backdrop-blur text-stone-100 p-3 sm:px-8 border-t border-stone-800 shadow-2xl z-50 transform translate-y-full transition-transform duration-300 ease-in-out">
+    <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        
+        <div class="flex items-center space-x-3">
+            <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+            <div>
+                <span class="font-cinzel text-xs text-stone-400 block">{{ book.name_en }} {{ chapter }}</span>
+                <span id="audio-verse-label" class="font-bold text-sm text-white font-cinzel">Verse 1</span>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <button onclick="window.bibleAudio.prev()" class="text-stone-400 hover:text-white text-lg">⏮</button>
+            <button id="audio-play-pause-btn" onclick="window.bibleAudio.isPaused ? window.bibleAudio.resume() : window.bibleAudio.pause()" 
+                    class="w-10 h-10 rounded-full bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center text-lg font-bold shadow-md">
+                ⏸
+            </button>
+            <button onclick="window.bibleAudio.next()" class="text-stone-400 hover:text-white text-lg">⏭</button>
+            <button onclick="window.bibleAudio.stop()" class="text-stone-400 hover:text-red-400 text-xs px-2 py-1 rounded border border-stone-700">Stop</button>
+        </div>
+
+        <div class="flex items-center space-x-2 text-xs">
+            <select id="audio-lang-select" onchange="window.bibleAudio.setLanguage(this.value)" class="bg-stone-800 text-stone-200 border border-stone-700 rounded px-2 py-1 focus:outline-none">
+                <option value="ta" selected>Tamil (தமிழ்)</option>
+                <option value="en">English</option>
+            </select>
+
+            <select id="audio-rate-select" onchange="window.bibleAudio.setRate(this.value)" class="bg-stone-800 text-stone-200 border border-stone-700 rounded px-2 py-1 focus:outline-none">
+                <option value="0.75">0.75x</option>
+                <option value="1.0" selected>1.0x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Quick Book Navigator -->
+<div id="quick-nav-modal" class="hidden fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-stone-900 rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[85vh] flex flex-col border border-stone-200 dark:border-stone-800">
+        <div class="flex justify-between items-center pb-4 border-b border-stone-100 dark:border-stone-800">
+            <h3 class="font-cinzel font-bold text-lg">Select Book</h3>
+            <button onclick="document.getElementById('quick-nav-modal').classList.add('hidden')" class="text-stone-400 hover:text-stone-600 text-2xl">&times;</button>
+        </div>
+        <div class="overflow-y-auto pr-1 py-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+            {% for b in books %}
+            <a href="/read/{{ b[0] }}/1?mode={{ mode }}" class="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:border-amber-700 hover:bg-amber-50/50 dark:hover:bg-stone-800 block">
+                <span class="font-semibold block text-stone-900 dark:text-stone-100">{{ b[1] }}</span>
+                <span class="font-tamil text-stone-500 text-[11px] block">{{ b[2] }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/audio_player.js"></script>
+<script>
+    window.CURRENT_BOOK_ID = {{ book.id }};
+    window.CURRENT_CHAPTER = {{ chapter }};
+
+    document.addEventListener('DOMContentLoaded', () => {
+        window.bibleAudio.init({{ book.id }}, {{ chapter }}, {{ next_ch or 'null' }}, '{{ mode }}');
+    });
+
+    function changeFontSize(delta) {
+        document.querySelectorAll('.verse-text-en, .verse-text-ta').forEach(el => {
+            const currentSize = parseFloat(window.getComputedStyle(el).fontSize);
+            el.style.fontSize = (currentSize + delta) + 'px';
+        });
+    }
+
+    function toggleZenMode() {
+        const header = document.getElementById('site-header');
+        const toolbar = document.getElementById('reader-toolbar');
+        header.classList.toggle('hidden');
+        toolbar.classList.toggle('top-2');
+        showToast("Zen Mode: Click Focus to restore header");
+    }
+</script>
+{% endblock %}

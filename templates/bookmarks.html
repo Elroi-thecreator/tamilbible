@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Saved Bookmarks & Highlights{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <div class="flex flex-wrap justify-between items-center gap-4 mb-8 pb-4 border-b border-stone-200 dark:border-stone-800">
+        <div>
+            <h1 class="text-2xl font-cinzel font-bold text-stone-900 dark:text-stone-100">Bookmarks & Highlights</h1>
+            <p class="font-tamil text-xs text-stone-500">சேமிக்கப்பட்ட வசனங்கள்</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button onclick="exportUserData()" class="text-xs px-3 py-1.5 bg-stone-100 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-lg hover:border-amber-700">Backup JSON</button>
+            <button onclick="clearAllBookmarks()" class="text-xs text-rose-600 hover:underline">Clear All</button>
+        </div>
+    </div>
+
+    <div id="bookmarks-list" class="space-y-4">
+        <!-- Injected via JavaScript -->
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderBookmarks() {
+    const list = document.getElementById('bookmarks-list');
+    const bookmarks = getBookmarks();
+
+    if (bookmarks.length === 0) {
+        list.innerHTML = `
+            <div class="bg-white dark:bg-stone-900 p-10 text-center rounded-xl border border-stone-200 dark:border-stone-800">
+                <span class="text-3xl block mb-2">📖</span>
+                <p class="text-stone-500 text-sm">No bookmarks saved yet.</p>
+                <p class="text-xs text-stone-400 mt-1">Click the star icon (☆) next to any verse while reading.</p>
+            </div>`;
+        return;
+    }
+
+    list.innerHTML = bookmarks.map(b => `
+        <div class="bg-white dark:bg-stone-900 p-5 rounded-xl border border-stone-200 dark:border-stone-800 shadow-sm space-y-3">
+            <div class="flex justify-between items-center">
+                <a href="/read/${b.bookId}/${b.ch}?mode=bilingual#v${b.v}" class="font-cinzel font-bold text-sm text-amber-800 dark:text-amber-500 hover:underline">
+                    ${b.bookNameEn} ${b.ch}:${b.v} • <span class="font-tamil font-normal text-xs text-stone-500">${b.bookNameTa} ${b.ch}:${b.v}</span>
+                </a>
+                <div class="flex items-center space-x-3">
+                    <span class="text-[11px] text-stone-400">${b.date}</span>
+                    <button onclick="toggleBookmark(${b.bookId},'${b.bookNameEn}','${b.bookNameTa}',${b.ch},${b.v},'',''); renderBookmarks();" class="text-xs text-rose-500 hover:underline">Remove</button>
+                </div>
+            </div>
+            <p class="font-english text-stone-700 dark:text-stone-300 text-sm leading-relaxed">${b.textEn}</p>
+            <p class="font-tamil text-stone-900 dark:text-stone-100 text-sm border-t border-stone-100 dark:border-stone-800 pt-2">${b.textTa}</p>
+        </div>
+    `).join('');
+}
+
+function clearAllBookmarks() {
+    if (confirm("Remove all saved bookmarks from your browser?")) {
+        localStorage.removeItem(STORAGE_KEYS.BOOKMARKS);
+        renderBookmarks();
+    }
+}
+
+function exportUserData() {
+    const data = {
+        bookmarks: getBookmarks(),
+        highlights: getHighlights(),
+        exported_at: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bible_user_data_${Date.now()}.json`;
+    a.click();
+}
+
+document.addEventListener('DOMContentLoaded', renderBookmarks);
+</script>
+{% endblock %}
